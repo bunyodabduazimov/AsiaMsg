@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum InstanceStatus {
+  WAITING_QR
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  RECONNECTING
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          UserRole       @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  instances     Instance[]
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Instance {
+  id           String           @id @default(cuid())
+  userId       String
+  name         String
+  phoneNumber  String?
+  status       InstanceStatus   @default(WAITING_QR)
+  qrCode       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session      InstanceSession?
+  apiTokens    ApiToken[]
+  settings     InstanceSetting?
+  messages     Message[]
+  webhookLogs  WebhookLog[]
+  logs         InstanceLog[]
+
+  @@index([userId, status])
+}
+
+model InstanceSession {
+  id            String   @id @default(cuid())
+  instanceId    String   @unique
+  authState     Json
+  lastSyncedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  instance      Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+}
+
+model ApiToken {
+  id          String   @id @default(cuid())
+  instanceId  String
+  tokenHash   String   @unique
+  name        String
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+}
+
+model InstanceSetting {
+  id                    String   @id @default(cuid())
+  instanceId            String   @unique
+  webhookUrl            String?
+  webhookSecret         String?
+  autoReconnect         Boolean  @default(true)
+  storeIncomingMessages Boolean  @default(true)
+  storeOutgoingMessages Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  instance              Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  instanceId  String
+  direction   String
+  remoteJid   String
+  messageId   String?
+  payload     Json
+  status      String?
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+  @@index([remoteJid])
+}
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  instanceId  String
+  eventType   String
+  targetUrl   String
+  statusCode  Int?
+  requestBody Json
+  responseBody Json?
+  error       String?
+  createdAt   DateTime @default(now())
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+}
+
+model InstanceLog {
+  id          String   @id @default(cuid())
+  instanceId  String
+  level       String
+  message     String
+  meta        Json?
+  createdAt   DateTime @default(now())
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+}

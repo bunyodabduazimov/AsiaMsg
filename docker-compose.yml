@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: asiamsg-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: asiamsg
+      MYSQL_USER: asiamsg
+      MYSQL_PASSWORD: asiamsg
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - asiamsg-mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: asiamsg-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - asiamsg-redis-data:/data
+
+volumes:
+  asiamsg-mysql-data:
+  asiamsg-redis-data:
