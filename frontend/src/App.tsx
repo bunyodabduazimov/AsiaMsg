@@ -2,6 +2,8 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from '@/features/auth/AuthContext';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { InstanceDetailPage } from '@/pages/InstanceDetailPage';
+import { InstancesPage } from '@/pages/InstancesPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 
@@ -36,6 +38,11 @@ const AppRoutes = () => {
         element={<RegisterPage />}
       />
       <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/instances" element={<ProtectedRoute><InstancesPage /></ProtectedRoute>} />
+      <Route
+        path="/instances/:instanceId"
+        element={<ProtectedRoute><InstanceDetailPage /></ProtectedRoute>}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

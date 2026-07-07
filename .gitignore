@@ -36,6 +36,7 @@ sessions/
 auth_info/
 backend/sessions/
 backend/auth_info/
+backend/storage/
 
 # ==========================
 # Uploads

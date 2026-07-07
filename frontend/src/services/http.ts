@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { authStore } from '@/stores/auth.store';
+import { connectSocket } from '@/services/socket';
 
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -39,6 +40,7 @@ http.interceptors.response.use(
     try {
       const { data } = await refreshClient.post('/auth/refresh', { refreshToken });
       authStore.saveSession(data);
+      connectSocket(data.accessToken);
       const headers = originalRequest.headers ?? {};
       originalRequest.headers = headers;
       headers.Authorization = `Bearer ${data.accessToken}`;

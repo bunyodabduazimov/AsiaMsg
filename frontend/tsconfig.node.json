@@ -1,9 +1,11 @@
 {
   "compilerOptions": {
     "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "allowSyntheticDefaultImports": true
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"],
+    "lib": ["ES2022", "WebWorker"]
   },
   "include": ["vite.config.ts", "tailwind.config.ts", "postcss.config.js"]
 }

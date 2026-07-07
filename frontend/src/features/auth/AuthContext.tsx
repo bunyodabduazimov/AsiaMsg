@@ -7,6 +7,7 @@ import {
   type PropsWithChildren
 } from 'react';
 import { authApi } from '@/services/auth';
+import { connectSocket, disconnectSocket } from '@/services/socket';
 import { authStore } from '@/stores/auth.store';
 import type { AuthSession, AuthUser } from '@/types/auth';
 
@@ -39,6 +40,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           user: currentUser
         });
         setUser(currentUser);
+        connectSocket(session.accessToken);
       } catch {
         try {
           const refreshed = await authApi.refresh({
@@ -46,9 +48,11 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           });
           authStore.saveSession(refreshed);
           setUser(refreshed.user);
+          connectSocket(refreshed.accessToken);
         } catch {
           authStore.clearSession();
           setUser(null);
+          disconnectSocket();
         }
       } finally {
         setIsBootstrapping(false);
@@ -61,6 +65,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const applySession = (session: AuthSession) => {
     authStore.saveSession(session);
     setUser(session.user);
+    connectSocket(session.accessToken);
   };
 
   const login = async (email: string, password: string) => {
@@ -79,6 +84,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       await authApi.logout(refreshToken);
     }
     authStore.clearSession();
+    disconnectSocket();
     setUser(null);
   };
 

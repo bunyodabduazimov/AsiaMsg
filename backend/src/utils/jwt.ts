@@ -10,7 +10,7 @@ export type AccessTokenPayload = {
 
 export const signAccessToken = (payload: AccessTokenPayload) =>
   jwt.sign(payload, env.JWT_ACCESS_SECRET, {
-    expiresIn: env.ACCESS_TOKEN_TTL
+    expiresIn: env.ACCESS_TOKEN_TTL as jwt.SignOptions['expiresIn']
   });
 
 export const verifyAccessToken = (token: string) =>
