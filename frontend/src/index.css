@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  background: #f8fafc;
+  color-scheme: light;
+}
+
+html.dark {
+  background: #020617;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: inherit;
+  color: inherit;
+}
+
+/* Base custom styles to matches exact Figma-like design with smooth scrolls and custom scrollbar style */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

@@ -19,6 +19,11 @@ export type UpdatePhoneNumberInput = {
   phoneNumber: string | null;
 };
 
+export type UpdateInstanceStatusInput = {
+  status: InstanceStatus;
+  qrCode?: string | null;
+};
+
 export type InstanceRuntimeSnapshot = {
   instanceId: string;
   status: InstanceStatus;

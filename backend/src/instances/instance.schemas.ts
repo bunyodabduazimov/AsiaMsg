@@ -13,3 +13,8 @@ export const updateInstanceSchema = z.object({
 export const updatePhoneNumberSchema = z.object({
   phoneNumber: z.string().min(3).max(32).nullable()
 });
+
+export const updateInstanceStatusSchema = z.object({
+  status: z.enum(['WAITING_QR', 'CONNECTING', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING']),
+  qrCode: z.string().min(1).nullable().optional()
+});

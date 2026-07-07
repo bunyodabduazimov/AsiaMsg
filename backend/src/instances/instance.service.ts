@@ -3,6 +3,7 @@ import { baileysManager } from '../providers/whatsapp/baileys.manager';
 import { InstanceRepository } from './instance.repository';
 import type {
   CreateInstanceInput,
+  UpdateInstanceStatusInput,
   UpdateInstanceInput,
   UpdatePhoneNumberInput
 } from './instance.types';
@@ -40,6 +41,11 @@ export class InstanceService {
   async updatePhoneNumber(userId: string, instanceId: string, input: UpdatePhoneNumberInput) {
     await this.getById(userId, instanceId);
     return this.repository.updatePhoneNumber(instanceId, input.phoneNumber);
+  }
+
+  async updateStatus(userId: string, instanceId: string, input: UpdateInstanceStatusInput) {
+    await this.getById(userId, instanceId);
+    return this.repository.updateStatus(instanceId, input.status, input.qrCode ?? undefined);
   }
 
   async connect(userId: string, instanceId: string) {

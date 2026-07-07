@@ -3,7 +3,8 @@ import { asyncHandler } from '../utils/async-handler';
 import {
   createInstanceSchema,
   updateInstanceSchema,
-  updatePhoneNumberSchema
+  updatePhoneNumberSchema,
+  updateInstanceStatusSchema
 } from './instance.schemas';
 import { instanceService } from './instance.service';
 
@@ -60,6 +61,18 @@ export const updateInstancePhoneNumber = asyncHandler(async (req: Request, res: 
   const payload = updatePhoneNumberSchema.parse(req.body);
   const instanceId = String(req.params.instanceId);
   const item = await instanceService.updatePhoneNumber(req.authUser.id, instanceId, payload);
+  res.json(item);
+});
+
+export const updateInstanceStatus = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const payload = updateInstanceStatusSchema.parse(req.body);
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.updateStatus(req.authUser.id, instanceId, payload);
   res.json(item);
 });
 

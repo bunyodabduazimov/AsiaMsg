@@ -1,0 +1,6 @@
+{
+  "name": "AsiaMsg",
+  "description": "Интеграция WhatsApp и бизнес-сообщений для вашего роста",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
