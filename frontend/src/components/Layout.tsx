@@ -12,6 +12,7 @@ interface LayoutProps {
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
+  onLogout: () => void;
   children: React.ReactNode;
 }
 
@@ -24,6 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({
   onThemeChange,
   onToggleSidebar,
   onCloseSidebar,
+  onLogout,
   children
 }) => {
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
@@ -90,13 +92,14 @@ export const Layout: React.FC<LayoutProps> = ({
             onLanguageChange={onLanguageChange}
             onThemeChange={onThemeChange}
             onMenuClick={onToggleSidebar}
+            onLogout={onLogout}
           />
 
           {/* Scrollable page body */}
           <main className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8 transition-colors duration-200 ${
             resolvedTheme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
           }`}>
-            <div className="mx-auto h-full w-full max-w-7xl">
+            <div className="h-full w-full">
               {children}
             </div>
           </main>

@@ -1,20 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Send, 
-  Search, 
-  RefreshCw, 
-  MessageSquare, 
-  CheckCheck, 
-  ChevronRight, 
-  ChevronLeft, 
-  X,
-  Smile,
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
+  MessageSquare,
   Paperclip,
-  Check,
-  Eye,
-  CornerUpLeft,
-  MoreVertical,
-  HelpCircle
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  Smile,
+  Upload,
+  X
 } from 'lucide-react';
 import { AppState, Message } from '../../types';
 import { StatCard } from '../StatCard';
@@ -23,657 +20,743 @@ import { StatusBadge } from '../StatusBadge';
 interface MessagesViewProps {
   state: AppState;
   onSelectMessage: (id: string | null) => void;
-  onAddMessage: (msg: Message) => void;
+  onAddMessage: (msg: Message) => Promise<Message | void> | Message | void;
+  onRefreshMessages?: () => void | Promise<void>;
   onSendMessageClick?: () => void;
 }
+
+type Segment = 'all' | 'inbound' | 'outbound' | 'errors';
+type ComposeType = 'text' | 'file';
+
+type ComposeState = {
+  instanceId: string;
+  remoteJid: string;
+  type: ComposeType;
+  messageText: string;
+  attachmentName: string;
+  attachmentType: string;
+  attachmentData: string;
+};
+
+const itemsPerPage = 8;
+
+const formatShort = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+const createMessageTime = () => new Date().toLocaleString('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+});
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
   state,
   onSelectMessage,
   onAddMessage,
+  onRefreshMessages,
   onSendMessageClick,
 }) => {
   const isRu = state.language === 'RU';
-
-  // Filters state
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterInstance, setFilterInstance] = useState('Все');
-  const [filterStatus, setFilterStatus] = useState('Все');
-  const [filterType, setFilterType] = useState('Все');
-  
-  // Segment tabs
-  const [activeSegment, setActiveSegment] = useState<'all' | 'inbound' | 'outbound' | 'templates'>('all');
-
-  // Detail panel tabs
-  const [activePanelTab, setActivePanelTab] = useState<'chat' | 'details' | 'history'>('chat');
-  
-  // Send state
-  const [composeText, setComposeText] = useState('');
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-
-  // Pagination
+  const [instanceFilter, setInstanceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [segment, setSegment] = useState<Segment>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [compose, setCompose] = useState<ComposeState>({
+    instanceId: state.instances[0]?.id || '',
+    remoteJid: '',
+    type: 'text',
+    messageText: '',
+    attachmentName: '',
+    attachmentType: '',
+    attachmentData: ''
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto scroll chat to bottom when active message changes or replies are sent
+  const stats = useMemo(() => {
+    const total = state.messages.length;
+    const inbound = state.messages.filter(message => message.type === 'Входящее').length;
+    const outbound = state.messages.filter(message => message.type === 'Исходящее').length;
+    const errors = state.messages.filter(message => message.status === 'Ошибка').length;
+    return { total, inbound, outbound, errors };
+  }, [state.messages]);
+
+  const instanceOptions = useMemo(() => {
+    return state.instances.map(instance => ({ id: instance.id, name: instance.name }));
+  }, [state.instances]);
+
+  const filteredMessages = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return state.messages
+      .filter(message => {
+        const matchesQuery =
+          !query ||
+          message.id.toLowerCase().includes(query) ||
+          message.number.toLowerCase().includes(query) ||
+          message.instance.toLowerCase().includes(query) ||
+          message.messageText.toLowerCase().includes(query);
+
+        const matchesInstance = instanceFilter === 'all' || message.instance === instanceFilter;
+        const matchesStatus = statusFilter === 'all' || message.status === statusFilter;
+        const matchesType = typeFilter === 'all' || message.type === typeFilter;
+
+        const matchesSegment =
+          segment === 'all' ||
+          (segment === 'inbound' && message.type === 'Входящее') ||
+          (segment === 'outbound' && message.type === 'Исходящее') ||
+          (segment === 'errors' && message.status === 'Ошибка');
+
+        return matchesQuery && matchesInstance && matchesStatus && matchesType && matchesSegment;
+      })
+      .slice()
+      .sort((a, b) => b.time.localeCompare(a.time));
+  }, [searchQuery, instanceFilter, statusFilter, typeFilter, segment, state.messages]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredMessages.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const visibleMessages = filteredMessages.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
+
+  const activeMessage = useMemo(() => {
+    const selected = state.selectedMessageId
+      ? filteredMessages.find(message => message.id === state.selectedMessageId)
+      : null;
+
+    return selected || filteredMessages[0] || null;
+  }, [filteredMessages, state.selectedMessageId]);
+
+  const conversation = useMemo(() => {
+    if (!activeMessage) return [];
+
+    return state.messages
+      .filter(message => message.number === activeMessage.number)
+      .slice()
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [activeMessage, state.messages]);
+
   useEffect(() => {
     if (chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [state.selectedMessageId, activePanelTab]);
+  }, [activeMessage?.id, conversation.length, composeOpen]);
 
-  const handleComposeSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!composeText.trim() || !state.selectedMessageId) return;
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, instanceFilter, statusFilter, typeFilter, segment]);
 
-    const currentMsg = state.messages.find(m => m.id === state.selectedMessageId);
-    if (!currentMsg) return;
+  useEffect(() => {
+    if (compose.instanceId || !state.instances[0]) return;
+    setCompose(prev => ({ ...prev, instanceId: state.instances[0].id }));
+  }, [compose.instanceId, state.instances]);
 
-    // Create mock outbound reply message
-    const newReply: Message = {
-      id: `msg-reply-${Date.now()}`,
-      number: currentMsg.number,
-      instance: currentMsg.instance,
+  const openCompose = () => {
+    setCompose({
+      instanceId: state.instances[0]?.id || '',
+      remoteJid: activeMessage?.number || '',
+      type: 'text',
+      messageText: '',
+      attachmentName: '',
+      attachmentType: '',
+      attachmentData: ''
+    });
+    setSelectedFile(null);
+    setComposeOpen(true);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setInstanceFilter('all');
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setSegment('all');
+    setCurrentPage(1);
+  };
+
+  const handleFilePick = (file: File | null) => {
+    setSelectedFile(file);
+
+    if (!file) {
+      setCompose(prev => ({
+        ...prev,
+        attachmentName: '',
+        attachmentType: '',
+        attachmentData: ''
+      }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.includes(',') ? result.split(',')[1] || '' : result;
+      setCompose(prev => ({
+        ...prev,
+        attachmentName: file.name,
+        attachmentType: file.type,
+        attachmentData: base64
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitCompose = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!compose.instanceId || !compose.remoteJid.trim() || !compose.messageText.trim()) return;
+    if (compose.type === 'file' && !compose.attachmentData) return;
+
+    const instanceName = instanceOptions.find(item => item.id === compose.instanceId)?.name || compose.instanceId;
+    const message: Message = {
+      id: `msg-${Date.now()}`,
+      number: compose.remoteJid.trim(),
+      instance: instanceName,
+      instanceId: compose.instanceId,
       type: 'Исходящее',
-      status: 'Доставлено',
-      time: '18.05.2025 14:35:00', // Mock time
-      messageText: composeText,
-      details: 'Отправлено пользователем из чата AsiaMsg',
+      status: 'Отправлено',
+      time: createMessageTime(),
+      messageText: compose.messageText.trim(),
+      details: selectedFile
+        ? `${selectedFile.name} (${Math.round(selectedFile.size / 1024)} KB)`
+        : compose.remoteJid.trim(),
+      attachmentName: selectedFile?.name,
+      attachmentType: selectedFile?.type,
+      attachmentSize: selectedFile?.size,
+      attachmentData: compose.attachmentData,
       statusHistory: [
-        { status: 'Создано', time: '18.05.2025 14:34:55' },
-        { status: 'Отправлено', time: '18.05.2025 14:34:58' },
-        { status: 'Доставлено', time: '18.05.2025 14:35:00' }
+        { status: 'Создано', time: createMessageTime() },
+        { status: 'Отправлено', time: createMessageTime() }
       ]
     };
 
-    onAddMessage(newReply);
-    setComposeText('');
-    setTimeout(() => {
-      if (chatBottomRef.current) {
-        chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, 100);
-  };
-
-  // Get conversation messages with selected client phone
-  const activeMessage = state.messages.find(m => m.id === state.selectedMessageId);
-  const conversation = activeMessage 
-    ? state.messages.filter(m => m.number === activeMessage.number).reverse() // chronological order
-    : [];
-
-  // Dropdown options
-  const instances = ['Все', 'Sales Bot', 'Support Line', 'Marketing', 'Notifications'];
-  const statuses = ['Все', 'Доставлено', 'Отправлено', 'Ошибка', 'В очереди'];
-  const types = ['Все', 'Входящее', 'Исходящее'];
-
-  // Apply search & filters
-  const filtered = state.messages.filter(msg => {
-    const matchesSearch = 
-      msg.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (msg.messageText || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      msg.id.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesInstance = filterInstance === 'Все' || msg.instance === filterInstance;
-    const matchesStatus = filterStatus === 'Все' || msg.status === filterStatus;
-    const matchesType = filterType === 'Все' || msg.type === filterType;
-
-    // Segment tab override
-    let matchesSegment = true;
-    if (activeSegment === 'inbound') matchesSegment = msg.type === 'Входящее';
-    if (activeSegment === 'outbound') matchesSegment = msg.type === 'Исходящее';
-    if (activeSegment === 'templates') matchesSegment = false; // Mock template placeholder
-
-    return matchesSearch && matchesInstance && matchesStatus && matchesType && matchesSegment;
-  });
-
-  // Pagination logic
-  const totalItems = filtered.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
-
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setFilterInstance('Все');
-    setFilterStatus('Все');
-    setFilterType('Все');
-    setActiveSegment('all');
-    setCurrentPage(1);
+    try {
+      setSending(true);
+      const created = await Promise.resolve(onAddMessage(message));
+      onSelectMessage((created as Message | undefined)?.id || message.id);
+      setComposeOpen(false);
+      setSelectedFile(null);
+      setCompose(prev => ({
+        ...prev,
+        remoteJid: '',
+        messageText: '',
+        attachmentName: '',
+        attachmentType: ''
+      }));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* View Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {isRu ? 'Сообщения' : 'Messages'}
           </h1>
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-            {isRu ? 'Управление сообщениями и переписками WhatsApp' : 'Overview of sent and received WhatsApp client chats'}
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            {isRu ? 'Данные читаются из базы и синхронизируются с backend' : 'Data is loaded from the database and synced with backend'}
           </p>
         </div>
-        
+
         <button
-          onClick={onSendMessageClick}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-all duration-200 shadow-sm shadow-blue-100 dark:shadow-none cursor-pointer"
+          type="button"
+          onClick={openCompose}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
-          <Send className="w-4 h-4" />
-          <span>{isRu ? 'Отправить сообщение' : 'Send Message'}</span>
+          <Plus className="h-4 w-4" />
+          {isRu ? 'Отправить сообщение' : 'Send message'}
         </button>
       </div>
 
-      {/* 4 Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          title={isRu ? "Всего сообщений" : "Total Messages"}
-          value="24 812"
-          trend="18%"
+          title={isRu ? 'Всего' : 'Total'}
+          value={stats.total.toLocaleString('ru-RU')}
+          trend="—"
           trendDirection="up"
           trendColor="green"
-          icon={<MessageSquare className="w-4.5 h-4.5" />}
+          icon={<MessageSquare className="h-4.5 w-4.5" />}
           iconBg="bg-blue-50 text-blue-600"
         />
         <StatCard
-          title={isRu ? "Отправлено сегодня" : "Sent Today"}
-          value="1 248"
-          trend="22%"
+          title={isRu ? 'Входящие' : 'Inbound'}
+          value={stats.inbound.toLocaleString('ru-RU')}
+          trend="—"
           trendDirection="up"
           trendColor="green"
-          icon={<Send className="w-4.5 h-4.5" />}
+          icon={<ChevronLeft className="h-4.5 w-4.5" />}
           iconBg="bg-emerald-50 text-emerald-600"
         />
         <StatCard
-          title={isRu ? "Доставлено" : "Delivered"}
-          value="23 152"
-          subValue="93.3%"
-          trend="16%"
+          title={isRu ? 'Исходящие' : 'Outbound'}
+          value={stats.outbound.toLocaleString('ru-RU')}
+          trend="—"
           trendDirection="up"
           trendColor="green"
-          icon={<CheckCheck className="w-4.5 h-4.5" />}
+          icon={<Send className="h-4.5 w-4.5" />}
           iconBg="bg-purple-50 text-purple-600"
         />
         <StatCard
-          title={isRu ? "Ошибки" : "Errors"}
-          value="156"
-          subValue="0.6%"
-          trend="8%"
-          trendDirection="up"
+          title={isRu ? 'Ошибки' : 'Errors'}
+          value={stats.errors.toLocaleString('ru-RU')}
+          trend="—"
+          trendDirection="down"
           trendColor="red"
-          icon={<X className="w-4.5 h-4.5" />}
+          icon={<CheckCheck className="h-4.5 w-4.5" />}
           iconBg="bg-rose-50 text-rose-600"
         />
       </div>
 
-      {/* Filter panel */}
-      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 shadow-3xs flex flex-wrap gap-4 items-end">
-        {/* Search input */}
-        <div className="flex-1 min-w-[200px]">
-          <span className="block text-xs font-semibold text-gray-400 dark:text-slate-500 mb-1.5">{isRu ? 'Поиск' : 'Search'}</span>
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 dark:text-slate-500 absolute left-3.5 top-3" />
+      <div className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-4 dark:border-slate-800">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <input
-              type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isRu ? "Поиск по номеру, тексту или ID..." : "Search by telephone, text or ID..."}
-              className="w-full bg-gray-50/60 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-xl py-2 pl-10 pr-4 text-xs text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder={isRu ? 'Поиск по номеру, тексту или ID...' : 'Search by number, text or ID...'}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-10 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label={isRu ? 'Очистить поиск' : 'Clear search'}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+          >
+            <RefreshCw className="h-4 w-4" />
+            {isRu ? 'Сбросить' : 'Reset'}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 px-4 py-4">
+          {([
+            { id: 'all', label: isRu ? 'Все' : 'All' },
+            { id: 'inbound', label: isRu ? 'Входящие' : 'Inbound' },
+            { id: 'outbound', label: isRu ? 'Исходящие' : 'Outbound' },
+            { id: 'errors', label: isRu ? 'Ошибки' : 'Errors' }
+          ] as const).map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSegment(item.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                segment === item.id
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+
+          <div className="ml-auto flex flex-wrap gap-2">
+            <select
+              value={instanceFilter}
+              onChange={e => setInstanceFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+            >
+              <option value="all">{isRu ? 'Все инстансы' : 'All instances'}</option>
+              {state.instances.map(instance => (
+                <option key={instance.id} value={instance.name}>
+                  {instance.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+            >
+              <option value="all">{isRu ? 'Все статусы' : 'All statuses'}</option>
+              <option value="Отправлено">{isRu ? 'Отправлено' : 'Sent'}</option>
+              <option value="Доставлено">{isRu ? 'Доставлено' : 'Delivered'}</option>
+              <option value="Ошибка">{isRu ? 'Ошибка' : 'Error'}</option>
+              <option value="В очереди">{isRu ? 'В очереди' : 'Queued'}</option>
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+            >
+              <option value="all">{isRu ? 'Все типы' : 'All types'}</option>
+              <option value="Входящее">{isRu ? 'Входящее' : 'Inbound'}</option>
+              <option value="Исходящее">{isRu ? 'Исходящее' : 'Outbound'}</option>
+            </select>
           </div>
         </div>
 
+        <div className="grid min-h-[640px] gap-0 border-t border-slate-100 xl:grid-cols-[1.08fr_0.92fr] dark:border-slate-800">
+          <section className="border-b border-slate-100 xl:border-b-0 xl:border-r dark:border-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 dark:border-slate-800">
+              <div className="text-xs font-semibold text-slate-400">
+                {isRu
+                  ? `Показано ${filteredMessages.length === 0 ? 0 : (safePage - 1) * itemsPerPage + 1}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} из ${filteredMessages.length}`
+                  : `Showing ${filteredMessages.length === 0 ? 0 : (safePage - 1) * itemsPerPage + 1}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} of ${filteredMessages.length}`}
+              </div>
 
-
-        {/* Instance select */}
-        <div className="w-36">
-          <span className="block text-xs font-semibold text-gray-400 dark:text-slate-500 mb-1.5">{isRu ? 'Инстанс' : 'Instance'}</span>
-          <select
-            value={filterInstance}
-            onChange={(e) => setFilterInstance(e.target.value)}
-            className="w-full bg-gray-50/60 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-gray-700 dark:text-slate-300 font-medium focus:outline-hidden focus:border-blue-500"
-          >
-            {instances.map(i => (
-              <option key={i} value={i} className="dark:bg-slate-900">{i === 'Все' ? (isRu ? 'Все инстансы' : 'All Instances') : i}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Status select */}
-        <div className="w-36">
-          <span className="block text-xs font-semibold text-gray-400 dark:text-slate-500 mb-1.5">{isRu ? 'Статус' : 'Status'}</span>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full bg-gray-50/60 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-gray-700 dark:text-slate-300 font-medium focus:outline-hidden focus:border-blue-500"
-          >
-            {statuses.map(s => (
-              <option key={s} value={s} className="dark:bg-slate-900">{s === 'Все' ? (isRu ? 'Все статусы' : 'All Statuses') : s}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Type select */}
-        <div className="w-36">
-          <span className="block text-xs font-semibold text-gray-400 dark:text-slate-500 mb-1.5">{isRu ? 'Тип' : 'Type'}</span>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full bg-gray-50/60 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-gray-700 dark:text-slate-300 font-medium focus:outline-hidden focus:border-blue-500"
-          >
-            {types.map(t => (
-              <option key={t} value={t} className="dark:bg-slate-900">{t === 'Все' ? (isRu ? 'Все типы' : 'All Types') : t}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Period placeholder range */}
-        <div className="w-44">
-          <span className="block text-xs font-semibold text-gray-400 dark:text-slate-500 mb-1.5">{isRu ? 'Период' : 'Period'}</span>
-          <div className="bg-gray-50/60 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-gray-500 dark:text-slate-400 font-medium pointer-events-none">
-            18.05.2025 – 18.06.2025
-          </div>
-        </div>
-
-        {/* Reset filters */}
-        <button
-          onClick={handleResetFilters}
-          className="border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300 rounded-xl px-4 py-2 text-xs font-medium cursor-pointer transition-all flex items-center gap-1 shrink-0"
-        >
-          <X className="w-3.5 h-3.5" />
-          <span>{isRu ? 'Сбросить' : 'Reset'}</span>
-        </button>
-      </div>
-
-      {/* Main Grid: Split column into Table + Active Chat details */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* Messages List and segment tabs (col-span-8) */}
-        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs xl:col-span-8 space-y-4">
-          {/* Segmented control bar */}
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
-            <div className="flex bg-gray-50 dark:bg-slate-950 p-1 rounded-xl border border-gray-100/60 dark:border-slate-800 gap-1 text-xs">
               <button
-                onClick={() => setActiveSegment('all')}
-                className={`px-3 py-1.5 font-semibold rounded-lg cursor-pointer transition-all ${
-                  activeSegment === 'all' 
-                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-3xs' 
-                    : 'text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                }`}
+                type="button"
+                onClick={() => {
+                  void onRefreshMessages?.();
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
               >
-                {isRu ? 'Все сообщения' : 'All Messages'}
-              </button>
-              <button
-                onClick={() => setActiveSegment('inbound')}
-                className={`px-3 py-1.5 font-semibold rounded-lg cursor-pointer transition-all ${
-                  activeSegment === 'inbound' 
-                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-3xs' 
-                    : 'text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                }`}
-              >
-                {isRu ? 'Входящие' : 'Inbound'}
-              </button>
-              <button
-                onClick={() => setActiveSegment('outbound')}
-                className={`px-3 py-1.5 font-semibold rounded-lg cursor-pointer transition-all ${
-                  activeSegment === 'outbound' 
-                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-3xs' 
-                    : 'text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                }`}
-              >
-                {isRu ? 'Исходящие' : 'Outbound'}
-              </button>
-              <button
-                onClick={() => setActiveSegment('templates')}
-                className={`px-3 py-1.5 font-semibold rounded-lg cursor-pointer transition-all ${
-                  activeSegment === 'templates' 
-                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-3xs' 
-                    : 'text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                }`}
-              >
-                {isRu ? 'Шаблоны' : 'Templates'}
+                <RefreshCw className="h-3.5 w-3.5" />
+                {isRu ? 'Обновить' : 'Refresh'}
               </button>
             </div>
 
-            <button className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-gray-950 dark:hover:text-white px-3 py-1.5 rounded-lg border border-gray-200/50 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 transition-colors">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{isRu ? 'Обновить' : 'Refresh'}</span>
-            </button>
-          </div>
-
-          {/* Table list */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-gray-400 dark:text-slate-500 font-semibold border-b border-gray-50 dark:border-slate-800 uppercase text-[10px] tracking-wider">
-                  <th className="py-2.5 w-6"></th>
-                  <th className="py-2.5">{isRu ? 'Номер' : 'Number'}</th>
-                  <th className="py-2.5">{isRu ? 'Инстанс' : 'Instance'}</th>
-                  <th className="py-2.5">{isRu ? 'Тип' : 'Type'}</th>
-                  <th className="py-2.5">{isRu ? 'Статус' : 'Status'}</th>
-                  <th className="py-2.5">{isRu ? 'Время' : 'Time'}</th>
-                  <th className="py-2.5 text-right">{isRu ? 'Действия' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60 text-gray-700 dark:text-slate-300">
-                {paginated.map((msg) => {
-                  const isActive = state.selectedMessageId === msg.id;
+            {visibleMessages.length === 0 ? (
+              <div className="flex min-h-[520px] flex-col items-center justify-center px-6 py-10 text-center">
+                <MessageSquare className="h-10 w-10 text-slate-300 dark:text-slate-700" />
+                <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                  {isRu ? 'Сообщения не найдены' : 'No messages found'}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  {isRu ? 'Попробуйте изменить фильтры или поиск' : 'Try changing filters or search'}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {visibleMessages.map(message => {
+                  const isActive = state.selectedMessageId === message.id;
 
                   return (
-                    <tr
-                      key={msg.id}
-                      onClick={() => onSelectMessage(msg.id)}
-                      className={`group hover:bg-gray-50/50 dark:hover:bg-slate-850/20 cursor-pointer transition-all ${
-                        isActive ? 'bg-blue-50/20 dark:bg-blue-950/20' : ''
+                    <button
+                      key={message.id}
+                      type="button"
+                      onClick={() => onSelectMessage(message.id)}
+                      className={`w-full px-4 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
+                        isActive ? 'bg-blue-50/60 dark:bg-blue-950/20' : ''
                       }`}
                     >
-                      <td className="py-3.5" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 text-blue-600 border-gray-200 dark:border-slate-800 rounded-sm focus:ring-blue-500 cursor-pointer"
-                        />
-                      </td>
-
-                      <td className="py-3.5 font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="text-emerald-500 font-bold font-mono">✆</span>
-                        {msg.number}
-                      </td>
-
-                      <td className="py-3.5 text-gray-600 dark:text-slate-300 font-semibold">{msg.instance}</td>
-
-                      <td className="py-3.5">
-                        <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
-                          msg.type === 'Входящее' 
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' 
-                            : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400'
-                        }`}>
-                          {msg.type}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5">
-                        <StatusBadge status={msg.status} size="sm" />
-                      </td>
-
-                      <td className="py-3.5 text-gray-400 dark:text-slate-500 font-mono text-[11px]">{msg.time}</td>
-
-                      <td className="py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex gap-1 justify-end opacity-75 group-hover:opacity-100">
-                          <button 
-                            onClick={() => onSelectMessage(msg.id)}
-                            className="p-1.5 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
-                            title={isRu ? "Открыть переписку" : "Open Chat"}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button className="p-1.5 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg text-gray-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400">
-                            <CornerUpLeft className="w-4 h-4" />
-                          </button>
-                          <button className="p-1.5 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg text-gray-400 dark:text-slate-500">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-sm font-bold text-white shadow-sm">
+                          {message.number.replace(/\D/g, '').slice(-2) || 'WA'}
                         </div>
-                      </td>
-                    </tr>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                                {message.number}
+                              </div>
+                              <div className="mt-1 truncate text-xs text-slate-400">
+                                {message.instance}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 flex-col items-end gap-2">
+                              <StatusBadge status={message.status} size="sm" />
+                              <span className="text-[10px] font-medium text-slate-400">{message.time}</span>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            {formatShort(message.messageText)}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                              message.type === 'Входящее'
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
+                            }`}>
+                              {message.type}
+                            </span>
+                            {message.attachmentName && (
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                                {message.attachmentName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            )}
 
-          {/* Table pagination footer */}
-          <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-slate-800 text-xs">
-            <span className="text-gray-400 dark:text-slate-500">
-              {isRu 
-                ? `Показано ${startIndex + 1}–${Math.min(startIndex + itemsPerPage, totalItems)} из ${totalItems}` 
-                : `Showing ${startIndex + 1}–${Math.min(startIndex + itemsPerPage, totalItems)} of ${totalItems}`
-              }
-            </span>
-
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 text-xs text-slate-400 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 dark:text-slate-500">{isRu ? 'Строк на странице' : 'Rows per page'}</span>
-                <select className="bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-md py-1 px-1.5 text-xs text-gray-600 dark:text-slate-400 font-medium">
-                  <option className="dark:bg-slate-900">10</option>
-                  <option className="dark:bg-slate-900">20</option>
-                  <option className="dark:bg-slate-900">50</option>
-                </select>
-              </div>
-
-              {/* Page arrows */}
-              <div className="flex gap-1">
                 <button
+                  type="button"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400 disabled:opacity-30 rounded-lg"
+                  disabled={safePage === 1}
+                  className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-800 dark:hover:bg-slate-800"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-1.5 font-semibold text-white">
+                  {safePage}
                 </button>
                 <button
-                  className="px-3 py-1 border rounded-lg font-semibold text-xs bg-blue-600 border-blue-600 text-white shadow-3xs dark:shadow-none"
-                >
-                  {currentPage}
-                </button>
-                <button
+                  type="button"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="p-1.5 border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400 disabled:opacity-30 rounded-lg"
+                  disabled={safePage === totalPages}
+                  className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-800 dark:hover:bg-slate-800"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
+
+              <span>
+                {isRu ? 'Страница сообщений' : 'Message page'}
+              </span>
             </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Right Chat Переписка widget (col-span-4) */}
-        <div className="xl:col-span-4 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl shadow-xs space-y-4 flex flex-col justify-between sticky top-24 h-[580px] overflow-hidden">
-          {activeMessage ? (
-            <>
-              {/* Chat Top header */}
-              <div className="p-4 border-b border-gray-50 dark:border-slate-850 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg">
-                    ✆
+          <section className="sticky top-24 bg-slate-50/50 dark:bg-slate-950/30">
+            {activeMessage ? (
+              <div className="flex h-full min-h-[640px] flex-col">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">{activeMessage.number}</h2>
+                    <p className="mt-1 text-xs text-slate-400">{activeMessage.instance}</p>
                   </div>
-                  <div className="text-left">
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">{activeMessage.number}</h3>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">
-                      {isRu ? 'Клиент • RU' : 'Client • RU'}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2">
                   <StatusBadge status={activeMessage.status} size="sm" />
-                  <button 
-                    onClick={() => onSelectMessage(null)}
-                    className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-300 w-6 h-6 rounded-full hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center justify-center font-bold cursor-pointer"
+                </div>
+
+                <div className="grid gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      {isRu ? 'Время' : 'Time'}
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{activeMessage.time}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      {isRu ? 'Тип' : 'Type'}
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{activeMessage.type}</div>
+                  </div>
+                </div>
+
+                <div className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+                  <div className="text-center">
+                    <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold text-slate-400 dark:border-slate-800 dark:bg-slate-900">
+                      {isRu ? 'Переписка' : 'Conversation'}
+                    </span>
+                  </div>
+
+                  {conversation.map(message => {
+                    const isInbound = message.type === 'Входящее';
+
+                    return (
+                      <div key={message.id} className={`flex ${isInbound ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
+                          isInbound
+                            ? 'rounded-tl-md border border-slate-200 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100'
+                            : 'rounded-tr-md bg-blue-600 text-white'
+                        }`}>
+                          <div className="whitespace-pre-wrap">{message.messageText || (isRu ? 'Без текста' : 'No text')}</div>
+                          {message.attachmentName && (
+                            <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                              isInbound ? 'bg-slate-100 text-slate-500' : 'bg-white/15 text-white/90'
+                            }`}>
+                              <Paperclip className="h-3 w-3" />
+                              {message.attachmentName}
+                            </div>
+                          )}
+                          <div className={`mt-2 flex items-center justify-between gap-3 text-[10px] ${isInbound ? 'text-slate-400' : 'text-blue-100'}`}>
+                            <span>{message.time}</span>
+                            <span>{message.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div ref={chatBottomRef} />
+                </div>
+
+                <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={openCompose}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                   >
-                    ✕
+                    <Send className="h-4 w-4" />
+                    {isRu ? 'Ответить / отправить' : 'Reply / send'}
                   </button>
-                </div>
-              </div>
 
-              {/* Sub-tabs menu inside the panel: Чат, Детали, История статусов */}
-              <div className="px-4 border-b border-gray-50 dark:border-slate-800 flex gap-4 text-xs shrink-0">
-                <button
-                  onClick={() => setActivePanelTab('chat')}
-                  className={`pb-2.5 font-semibold border-b-2 cursor-pointer transition-all ${
-                    activePanelTab === 'chat' 
-                      ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400' 
-                      : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {isRu ? 'Чат' : 'Chat'}
-                </button>
-                <button
-                  onClick={() => setActivePanelTab('details')}
-                  className={`pb-2.5 font-semibold border-b-2 cursor-pointer transition-all ${
-                    activePanelTab === 'details' 
-                      ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400' 
-                      : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {isRu ? 'Детали' : 'Details'}
-                </button>
-                <button
-                  onClick={() => setActivePanelTab('history')}
-                  className={`pb-2.5 font-semibold border-b-2 cursor-pointer transition-all ${
-                    activePanelTab === 'history' 
-                      ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400' 
-                      : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {isRu ? 'История статусов' : 'Status History'}
-                </button>
-              </div>
-
-              {/* Chat panel main body scroll */}
-              <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50 dark:bg-slate-950/40 space-y-3.5 min-h-0">
-                {activePanelTab === 'chat' && (
-                  <>
-                    <div className="text-center">
-                      <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 px-3 py-1 rounded-full shadow-3xs">
-                        18 июня 2025
-                      </span>
-                    </div>
-
-                    {conversation.map((msgItem) => {
-                      const isInbound = msgItem.type === 'Входящее';
-                      return (
-                        <div 
-                          key={msgItem.id} 
-                          className={`flex flex-col max-w-[85%] gap-1 ${
-                            isInbound ? 'mr-auto items-start' : 'ml-auto items-end'
-                          }`}
-                        >
-                          <div className={`p-3 rounded-2xl text-xs leading-relaxed ${
-                            isInbound 
-                              ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100 border border-gray-100 dark:border-slate-800 rounded-tl-sm' 
-                              : 'bg-blue-600 text-white rounded-tr-sm'
-                          }`}>
-                            <p className="whitespace-pre-wrap">{msgItem.messageText || 'Без текста'}</p>
-                          </div>
-                          <span className="text-[9px] text-gray-400 dark:text-slate-500 font-mono flex items-center gap-1">
-                            {msgItem.time.split(' ')[1] || '14:20'}
-                            {!isInbound && <span className="text-emerald-500">✓✓</span>}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <div ref={chatBottomRef} />
-                  </>
-                )}
-
-                {activePanelTab === 'details' && (
-                  <div className="space-y-3.5 text-xs text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-100/60 dark:border-slate-800 rounded-xl p-4 shadow-3xs">
-                    <div>
-                      <span className="text-gray-400 dark:text-slate-500 block mb-1">{isRu ? 'ID Сообщения' : 'Message ID'}</span>
-                      <code className="bg-gray-50 dark:bg-slate-950 px-2 py-1 rounded-md text-[10px] text-gray-500 dark:text-slate-400 font-mono border border-gray-100/10 dark:border-slate-800">
-                        msg_{activeMessage.id}A7F2D991
-                      </code>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 dark:text-slate-500 block mb-1">{isRu ? 'Инстанс-отправитель' : 'Sender Instance'}</span>
-                      <span className="font-semibold text-gray-800 dark:text-white">{activeMessage.instance}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-400 dark:text-slate-500 block mb-1">{isRu ? 'Технические детали доставки' : 'Delivery details'}</span>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">{activeMessage.details || 'Доставлено до адресата успешно.'}</p>
-                    </div>
-                  </div>
-                )}
-
-                {activePanelTab === 'history' && (
-                  <div className="space-y-4 bg-white dark:bg-slate-900 border border-gray-100/60 dark:border-slate-800 rounded-xl p-4 shadow-3xs text-left">
-                    <h4 className="font-semibold text-xs text-gray-800 dark:text-white mb-2">{isRu ? 'События жизненного цикла' : 'Lifecycle Milestones'}</h4>
-                    <div className="relative before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100 dark:before:bg-slate-800 space-y-4">
-                      {(activeMessage.statusHistory || [
-                        { status: 'Создано', time: activeMessage.time },
-                        { status: 'Отправлено', time: activeMessage.time },
-                        { status: 'Доставлено', time: activeMessage.time }
-                      ]).map((hist, idx) => (
-                        <div key={idx} className="flex gap-3 text-xs relative z-10">
-                          <div className="w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center text-[9px] font-extrabold shrink-0">
-                            ✓
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-800 dark:text-slate-200">{hist.status}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-slate-500 font-mono mt-0.5">{hist.time}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Chat composition compose bar (shrink-0) */}
-              <div className="p-3 border-t border-gray-50 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-                {activePanelTab === 'chat' ? (
-                  <form onSubmit={handleComposeSend} className="relative flex items-center">
-                    <div className="absolute left-2.5 flex items-center gap-1.5 text-gray-400">
-                      <button type="button" className="p-1 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer">
-                        <Smile className="w-4.5 h-4.5" />
-                      </button>
-                      <button type="button" className="p-1 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer">
-                        <Paperclip className="w-4.5 h-4.5" />
-                      </button>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={composeText}
-                      onChange={(e) => setComposeText(e.target.value)}
-                      placeholder={isRu ? "Введите сообщение..." : "Type a message..."}
-                      className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-800 rounded-full py-2.5 pl-20 pr-12 text-xs text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900"
-                    />
-
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <button
-                      type="submit"
-                      disabled={!composeText.trim()}
-                      className="absolute right-1.5 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-sm disabled:opacity-40 transition-all cursor-pointer"
+                      type="button"
+                      onClick={openCompose}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
                     >
-                      <Send className="w-3.5 h-3.5 rotate-45 -translate-x-0.5" />
+                      <Smile className="h-3.5 w-3.5" />
+                      {isRu ? 'Шаблон' : 'Template'}
                     </button>
-                  </form>
-                ) : (
-                  <div className="text-center py-2 text-gray-400 dark:text-slate-500 font-medium text-[10px]">
-                    {isRu ? 'Для отправки перейдите на вкладку Чат' : 'Switch to Chat tab to type reply'}
-                  </div>
-                )}
-                
-                {/* Chat footer metadata */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] text-gray-400 dark:text-slate-500 font-medium border-t border-gray-50 dark:border-slate-800 mt-3 pt-2.5 px-1.5">
-                  <div className="flex justify-between">
-                    <span>{isRu ? 'Время создания' : 'Created time'}</span>
-                    <span className="text-gray-700 dark:text-slate-300 font-mono">{activeMessage.time.split(' ')[1]}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{isRu ? 'Канал' : 'Channel'}</span>
-                    <span className="text-gray-700 dark:text-slate-300 font-semibold">WhatsApp</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{isRu ? 'Шаблон' : 'Template'}</span>
-                    <span className="text-gray-700 dark:text-slate-300 font-semibold">welcome_msg</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{isRu ? 'Язык' : 'Language'}</span>
-                    <span className="text-gray-700 dark:text-slate-300 font-semibold">ru</span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectMessage(null)}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      {isRu ? 'Снять выбор' : 'Clear selection'}
+                    </button>
                   </div>
                 </div>
               </div>
-            </>
-          ) : (
-            <div className="text-center py-32 text-gray-400 dark:text-slate-500 flex flex-col items-center justify-center gap-3">
-              <MessageSquare className="w-10 h-10 text-gray-300 dark:text-slate-700 stroke-1" />
-              <p className="text-xs font-semibold px-6 leading-relaxed">
-                {isRu ? 'Выберите сообщение из списка для открытия чата переписки' : 'Select a message to inspect the client conversation log'}
-              </p>
-            </div>
-          )}
+            ) : (
+              <div className="flex min-h-[640px] flex-col items-center justify-center px-6 py-10 text-center">
+                <MessageSquare className="h-10 w-10 text-slate-300 dark:text-slate-700" />
+                <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                  {isRu ? 'Выберите диалог' : 'Select a conversation'}
+                </h3>
+                <p className="mt-2 max-w-sm text-xs text-slate-400">
+                  {isRu ? 'Справа появится чат и форма ответа' : 'The chat and reply form will appear here'}
+                </p>
+              </div>
+            )}
+          </section>
         </div>
       </div>
+
+      {composeOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)] dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {isRu ? 'Отправить сообщение' : 'Send message'}
+                </h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  {isRu ? 'Заполните поля и отправьте сообщение из интерфейса' : 'Fill in the fields and send from the interface'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setComposeOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitCompose} className="space-y-4 px-5 py-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold text-slate-500">{isRu ? 'Кому' : 'To'}</span>
+                  <input
+                    value={compose.remoteJid}
+                    onChange={e => setCompose(prev => ({ ...prev, remoteJid: e.target.value }))}
+                    placeholder="+992..."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold text-slate-500">{isRu ? 'Инстанс' : 'Instance'}</span>
+                  <select
+                    value={compose.instanceId}
+                    onChange={e => setCompose(prev => ({ ...prev, instanceId: e.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    {instanceOptions.length === 0 ? (
+                      <option value="">{isRu ? 'Нет инстансов' : 'No instances'}</option>
+                    ) : (
+                      instanceOptions.map(instance => (
+                        <option key={instance.id} value={instance.id}>
+                          {instance.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold text-slate-500">{isRu ? 'Текст' : 'Text'}</span>
+                  <textarea
+                    value={compose.messageText}
+                    onChange={e => setCompose(prev => ({ ...prev, messageText: e.target.value }))}
+                    placeholder={isRu ? 'Введите сообщение...' : 'Type a message...'}
+                    rows={6}
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold text-slate-500">{isRu ? 'Тип' : 'Type'}</span>
+                  <select
+                    value={compose.type}
+                    onChange={e => setCompose(prev => ({ ...prev, type: e.target.value as ComposeType }))}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    <option value="text">{isRu ? 'Текст' : 'Text'}</option>
+                    <option value="file">{isRu ? 'Файл' : 'File'}</option>
+                  </select>
+
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={e => handleFilePick(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {isRu ? 'Добавить файл' : 'Add file'}
+                    </button>
+                    <div className="mt-3 space-y-1 text-[11px] text-slate-400">
+                      <div>{selectedFile ? selectedFile.name : (isRu ? 'Файл не выбран' : 'No file selected')}</div>
+                      <div>{isRu ? 'Файл будет сохранён в payload сообщения' : 'The file will be stored in the message payload'}</div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setComposeOpen(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                >
+                  {isRu ? 'Отмена' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                  {sending ? (isRu ? 'Отправка...' : 'Sending...') : (isRu ? 'Отправить' : 'Send')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -10,6 +10,13 @@ import { logger } from './utils/logger';
 
 export const createApp = () => {
   const app = express();
+  const allowedOrigins = new Set([
+    env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ]);
 
   app.use(
     pinoHttp({
@@ -19,7 +26,14 @@ export const createApp = () => {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.FRONTEND_URL,
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`CORS blocked for origin ${origin}`));
+      },
       credentials: true
     })
   );

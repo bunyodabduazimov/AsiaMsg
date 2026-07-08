@@ -11,6 +11,7 @@ export interface Instance {
   lastActive: string;
   messagesToday: number;
   qrCode?: string;
+  qrExpiresAt?: string;
   webhookUrl?: string;
   createdDate?: string;
 }
@@ -19,11 +20,16 @@ export interface Message {
   id: string;
   number: string;
   instance: string;
+  instanceId?: string;
   type: 'Входящее' | 'Исходящее';
   status: 'Доставлено' | 'Отправлено' | 'Ошибка' | 'В очереди';
   time: string;
   messageText: string;
   details?: string;
+  attachmentName?: string;
+  attachmentType?: string;
+  attachmentSize?: number;
+  attachmentData?: string;
   statusHistory?: { status: string; time: string }[];
 }
 

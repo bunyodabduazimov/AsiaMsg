@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import pino from 'pino';
 import QRCode from 'qrcode';
-import type { Prisma } from '@prisma/client';
+import type { InstanceStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../database';
 import { InstanceRepository } from '../../instances/instance.repository';
 import type { InstanceView } from '../../instances/instance.types';
@@ -11,10 +11,17 @@ import { emitToInstance, emitToUser } from '../../socket/socket-manager';
 type ManagedInstance = {
   socket: any;
   qrCode: string | null;
+  status: InstanceStatus;
+};
+
+type QrWaiter = {
+  resolve: (qrCode: string | null) => void;
+  timer: NodeJS.Timeout;
 };
 
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
+  private readonly qrWaiters = new Map<string, QrWaiter[]>();
   private readonly repository = new InstanceRepository();
 
   async connect(instance: InstanceView) {
@@ -23,6 +30,7 @@ export class BaileysManager {
     }
 
     const {
+      Browsers,
       default: makeWASocket,
       DisconnectReason,
       fetchLatestBaileysVersion,
@@ -30,20 +38,29 @@ export class BaileysManager {
     } = await import('@whiskeysockets/baileys');
 
     const authPath = this.getAuthPath(instance.id);
+    if (!instance.session) {
+      await rm(authPath, { recursive: true, force: true });
+    }
     await mkdir(authPath, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
     const socket = makeWASocket({
       auth: state,
       version,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 25000,
+      qrTimeout: 60000,
+      markOnlineOnConnect: false,
+      syncFullHistory: false,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      browser: ['AsiaMsg', 'Chrome', '1.0.0']
+      browser: Browsers.ubuntu('AsiaMsg')
     });
 
     const managed: ManagedInstance = {
       socket,
-      qrCode: null
+      qrCode: null,
+      status: 'CONNECTING'
     };
 
     this.instances.set(instance.id, managed);
@@ -57,13 +74,16 @@ export class BaileysManager {
       if (update.qr) {
         const qrCode = await QRCode.toDataURL(update.qr);
         managed.qrCode = qrCode;
+        managed.status = 'WAITING_QR';
         await this.repository.updateStatus(instance.id, 'WAITING_QR', qrCode);
         await this.repository.createLog(instance.id, 'info', 'QR code generated');
         emitToUser(instance.userId, 'instance:qr', { instanceId: instance.id, qrCode });
         emitToInstance(instance.id, 'instance:qr', { instanceId: instance.id, qrCode });
+        this.resolveQrWaiters(instance.id, qrCode);
       }
 
       if (update.connection === 'connecting') {
+        managed.status = 'CONNECTING';
         await this.repository.updateStatus(instance.id, 'CONNECTING', managed.qrCode);
         emitToUser(instance.userId, 'instance:status', {
           instanceId: instance.id,
@@ -76,7 +96,7 @@ export class BaileysManager {
       }
 
       if (update.connection === 'open') {
-        const connectedNumber = socket.user?.id ?? instance.phoneNumber ?? null;
+        const connectedNumber = this.normalizePhoneNumber(socket.user?.id ?? instance.phoneNumber ?? null);
         await this.repository.update(instance.id, {
           status: 'CONNECTED',
           qrCode: null,
@@ -84,6 +104,7 @@ export class BaileysManager {
         });
         await this.repository.createLog(instance.id, 'info', 'WhatsApp session connected');
         managed.qrCode = null;
+        managed.status = 'CONNECTED';
         emitToUser(instance.userId, 'instance:status', {
           instanceId: instance.id,
           status: 'CONNECTED'
@@ -96,10 +117,13 @@ export class BaileysManager {
 
       if (update.connection === 'close') {
         const statusCode = (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 408;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         const nextStatus = managed.qrCode ? 'WAITING_QR' : 'DISCONNECTED';
 
         this.instances.delete(instance.id);
+        if (!shouldReconnect) {
+          this.resolveQrWaiters(instance.id, null);
+        }
         await this.repository.updateStatus(
           instance.id,
           shouldReconnect ? 'RECONNECTING' : nextStatus,
@@ -109,7 +133,12 @@ export class BaileysManager {
           instance.id,
           shouldReconnect ? 'warn' : 'info',
           shouldReconnect ? 'WhatsApp session reconnecting' : 'WhatsApp session disconnected',
-          statusCode ? { statusCode } : undefined
+          {
+            ...(statusCode ? { statusCode } : {}),
+            message: update.lastDisconnect?.error instanceof Error
+              ? update.lastDisconnect.error.message
+              : undefined
+          }
         );
 
         emitToUser(instance.userId, 'instance:status', {
@@ -138,6 +167,65 @@ export class BaileysManager {
 
     managed.socket.end(undefined);
     this.instances.delete(instanceId);
+    this.resolveQrWaiters(instanceId, null);
+  }
+
+  isRunning(instanceId: string) {
+    return this.instances.has(instanceId);
+  }
+
+  getRuntimeStatus(instanceId: string) {
+    return this.instances.get(instanceId)?.status ?? null;
+  }
+
+  getRuntimeQr(instanceId: string) {
+    return this.instances.get(instanceId)?.qrCode ?? null;
+  }
+
+  async sendMessage(
+    instanceId: string,
+    remoteJid: string,
+    payload: Record<string, unknown>
+  ) {
+    const managed = this.instances.get(instanceId);
+    if (!managed) {
+      throw new Error('WhatsApp instance is not running');
+    }
+
+    const jid = this.normalizeRemoteJid(remoteJid);
+    return managed.socket.sendMessage(jid, payload);
+  }
+
+  async waitForQr(instanceId: string, timeoutMs = 60000) {
+    const existingQr = this.getRuntimeQr(instanceId);
+    if (existingQr) {
+      return existingQr;
+    }
+
+    return new Promise<string | null>(resolve => {
+      const timer = setTimeout(() => {
+        const waiters = this.qrWaiters.get(instanceId) ?? [];
+        this.qrWaiters.set(
+          instanceId,
+          waiters.filter(waiter => waiter.resolve !== resolve)
+        );
+        resolve(this.getRuntimeQr(instanceId));
+      }, timeoutMs);
+
+      const waiters = this.qrWaiters.get(instanceId) ?? [];
+      waiters.push({ resolve, timer });
+      this.qrWaiters.set(instanceId, waiters);
+    });
+  }
+
+  private resolveQrWaiters(instanceId: string, qrCode: string | null) {
+    const waiters = this.qrWaiters.get(instanceId) ?? [];
+    this.qrWaiters.delete(instanceId);
+
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(qrCode);
+    }
   }
 
   async restoreActiveSessions() {
@@ -153,6 +241,25 @@ export class BaileysManager {
 
   private getAuthPath(instanceId: string) {
     return path.join(process.cwd(), 'storage', 'wa', instanceId);
+  }
+
+  private normalizePhoneNumber(value: string | null) {
+    if (!value) return null;
+
+    const jid = value.trim();
+    const base = jid.split('@')[0] ?? jid;
+    const number = base.split(':')[0] ?? base;
+    return number || null;
+  }
+
+  private normalizeRemoteJid(value: string) {
+    const trimmed = value.trim();
+    if (trimmed.includes('@')) {
+      return trimmed;
+    }
+
+    const digits = trimmed.replace(/\D/g, '');
+    return `${digits}@s.whatsapp.net`;
   }
 }
 

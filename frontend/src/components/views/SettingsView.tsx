@@ -3,7 +3,6 @@ import {
   User, 
   Settings, 
   ShieldCheck, 
-  Globe, 
   Save, 
   Check, 
   Lock, 
@@ -12,19 +11,18 @@ import {
   ServerCrash 
 } from 'lucide-react';
 import { AppState } from '../../types';
+import { getDefaultApiBaseUrl } from '../../lib/api';
 
 interface SettingsViewProps {
   state: AppState;
   onUpdateProfile: (name: string, email: string) => void;
   onUpdateLanguage: (lang: 'RU' | 'EN') => void;
   onUpdateTheme: (theme: 'light' | 'dark' | 'system') => void;
-  backendStatus: 'demo' | 'loading' | 'connected' | 'error';
+  backendStatus: 'idle' | 'loading' | 'connected' | 'error';
   backendError: string | null;
-  backendApiUrl: string;
   backendUser: { id: string; name: string; email: string; role: 'USER' | 'ADMIN'; createdAt: string; updatedAt: string } | null;
-  onBackendApiUrlChange: (url: string) => void;
-  onBackendLogin: (baseUrl: string, email: string, password: string) => Promise<void>;
-  onBackendRegister: (baseUrl: string, name: string, email: string, password: string) => Promise<void>;
+  onBackendLogin: (email: string, password: string) => Promise<void>;
+  onBackendRegister: (name: string, email: string, password: string) => Promise<void>;
   onBackendDisconnect: () => void;
 }
 
@@ -35,14 +33,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateTheme,
   backendStatus,
   backendError,
-  backendApiUrl,
   backendUser,
-  onBackendApiUrlChange,
   onBackendLogin,
   onBackendRegister,
   onBackendDisconnect
 }) => {
   const isRu = state.language === 'RU';
+  const backendApiUrl = getDefaultApiBaseUrl();
 
   // Local state form fields
   const [userName, setUserName] = useState(state.userProfile.name);
@@ -127,20 +124,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 ? (isRu ? 'Синхронизация' : 'Syncing')
                 : backendStatus === 'error'
                   ? (isRu ? 'Ошибка' : 'Error')
-                  : (isRu ? 'Демо режим' : 'Demo mode')}
+              : (isRu ? 'Не подключено' : 'Not connected')}
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5 md:col-span-2">
             <label className="text-xs font-semibold text-slate-400">{isRu ? 'URL backend' : 'Backend URL'}</label>
-            <input
-              type="text"
-              value={backendApiUrl}
-              onChange={(e) => onBackendApiUrlChange(e.target.value)}
-              placeholder="http://localhost:4000"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
-            />
+            <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 break-all">
+              {backendApiUrl}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -179,7 +172,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             disabled={backendStatus === 'loading'}
-            onClick={() => onBackendLogin(backendApiUrl, backendEmail, backendPassword)}
+            onClick={() => onBackendLogin(backendEmail, backendPassword)}
             className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {isRu ? 'Войти и синхронизировать' : 'Login & Sync'}
@@ -187,7 +180,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             disabled={backendStatus === 'loading'}
-            onClick={() => onBackendRegister(backendApiUrl, backendName, backendEmail, backendPassword)}
+            onClick={() => onBackendRegister(backendName, backendEmail, backendPassword)}
             className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             {isRu ? 'Зарегистрировать' : 'Register'}
@@ -207,7 +200,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {isRu ? 'Текущий пользователь:' : 'Current user:'} {backendUser.name} ({backendUser.email})
             </span>
           ) : (
-            <span>{isRu ? 'Сейчас используется демо-режим, пока не введёте данные backend.' : 'Demo mode is active until you connect a backend.'}</span>
+            <span>{isRu ? 'Сейчас данные берутся только из backend API. Подключите backend, чтобы увидеть записи.' : 'All data comes from the backend API. Connect a backend to load records.'}</span>
           )}
         </div>
 

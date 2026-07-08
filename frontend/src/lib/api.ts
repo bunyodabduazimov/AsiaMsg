@@ -1,4 +1,3 @@
-import { initialInstances, initialLogs, initialMessages, initialTokens, initialWebhooks } from '../mockData';
 import type { ApiToken, Instance, LogEntry, Message, Webhook } from '../types';
 
 const STORAGE_KEYS = {
@@ -30,6 +29,7 @@ export interface BackendInstance {
   phoneNumber: string | null;
   status: 'WAITING_QR' | 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
   qrCode?: string | null;
+  qrExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
   settings?: {
@@ -51,6 +51,19 @@ export interface BackendMessage {
     id: string;
     name: string;
   };
+}
+
+export interface CreateBackendMessageInput {
+  instanceId: string;
+  remoteJid: string;
+  messageText: string;
+  messageType: 'text' | 'file';
+  attachment?: {
+    name: string;
+    type: string;
+    size: number;
+    dataBase64?: string;
+  } | null;
 }
 
 export interface BackendApiToken {
@@ -133,13 +146,15 @@ export interface BackendInstanceInput {
   phoneNumber?: string | null;
 }
 
-const demoFixtures = {
-  instances: initialInstances,
-  messages: initialMessages,
-  tokens: initialTokens,
-  webhooks: initialWebhooks,
-  logs: initialLogs
-};
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 export const getDefaultApiBaseUrl = () => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -158,14 +173,14 @@ export const readStoredConnection = (): BackendConnectionInfo => {
   }
 
   return {
-    apiBaseUrl: normalizeApiBaseUrl(window.localStorage.getItem(STORAGE_KEYS.apiBaseUrl) || getDefaultApiBaseUrl()),
+    apiBaseUrl: getDefaultApiBaseUrl(),
     accessToken: window.localStorage.getItem(STORAGE_KEYS.accessToken),
     refreshToken: window.localStorage.getItem(STORAGE_KEYS.refreshToken)
   };
 };
 
 export const persistConnection = (connection: BackendConnectionInfo) => {
-  window.localStorage.setItem(STORAGE_KEYS.apiBaseUrl, normalizeApiBaseUrl(connection.apiBaseUrl));
+  window.localStorage.removeItem(STORAGE_KEYS.apiBaseUrl);
 
   if (connection.accessToken) {
     window.localStorage.setItem(STORAGE_KEYS.accessToken, connection.accessToken);
@@ -203,7 +218,7 @@ export const fetchJson = async <T,>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Request failed with ${response.status}`);
+    throw new ApiError(body || `Request failed with ${response.status}`, response.status);
   }
 
   if (response.status === 204) {
@@ -243,6 +258,13 @@ export const fetchInstances = (apiBaseUrl: string, accessToken: string) =>
     items.map(mapBackendInstanceToUi)
   );
 
+export const fetchBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}`, {}, accessToken).then(mapBackendInstanceToUi);
+
 export const createBackendInstance = (
   apiBaseUrl: string,
   accessToken: string,
@@ -268,8 +290,49 @@ export const updateBackendInstanceStatus = (
     })
   }, accessToken).then(mapBackendInstanceToUi);
 
+export const connectBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/connect`, {
+    method: 'POST'
+  }, accessToken).then(mapBackendInstanceToUi);
+
+export const disconnectBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/disconnect`, {
+    method: 'POST'
+  }, accessToken).then(mapBackendInstanceToUi);
+
+export const fetchBackendInstanceQr = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/qr`, {}, accessToken).then(item => {
+    const mapped = mapBackendInstanceToUi(item);
+    return {
+      ...mapped,
+      qrExpiresAt: item.qrExpiresAt ?? (item.qrCode ? new Date(Date.now() + 60000).toISOString() : undefined)
+    };
+  });
+
+export const sendBackendMessage = (
+  apiBaseUrl: string,
+  accessToken: string,
+  input: CreateBackendMessageInput
+) =>
+  fetchJson<BackendMessage>(apiBaseUrl, '/api/messages', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, accessToken);
+
 export const mapBackendInstanceToUi = (item: BackendInstance): Instance => {
-  const number = item.phoneNumber || '—';
+  const number = formatPhoneNumber(item.phoneNumber) || '—';
   const updatedAt = new Date(item.updatedAt);
   const createdAt = new Date(item.createdAt);
 
@@ -282,9 +345,18 @@ export const mapBackendInstanceToUi = (item: BackendInstance): Instance => {
     lastActive: formatRelativeTime(updatedAt),
     messagesToday: 0,
     qrCode: item.qrCode || '',
+    qrExpiresAt: item.qrExpiresAt || undefined,
     webhookUrl: item.settings?.webhookUrl || undefined,
     createdDate: formatDateTime(createdAt)
   };
+};
+
+const formatPhoneNumber = (value: string | null) => {
+  if (!value) return '';
+
+  const trimmed = value.trim();
+  const base = trimmed.split('@')[0] ?? trimmed;
+  return base.split(':')[0] ?? base;
 };
 
 export const mapBackendStatusToUi = (status: BackendInstance['status']): Instance['status'] => {
@@ -339,6 +411,16 @@ export const mapBackendMessageToUi = (item: BackendMessage): Message => ({
   time: formatDateTime(new Date(item.sentAt || item.createdAt)),
   messageText: extractMessageText(item.payload),
   details: item.messageId || item.remoteJid,
+  attachmentName: (() => {
+    const payload = item.payload as Record<string, unknown> | null;
+    const attachment = payload && typeof payload === 'object' ? payload.attachment as Record<string, unknown> | undefined : undefined;
+    return typeof attachment?.name === 'string' ? attachment.name : undefined;
+  })(),
+  attachmentType: (() => {
+    const payload = item.payload as Record<string, unknown> | null;
+    const attachment = payload && typeof payload === 'object' ? payload.attachment as Record<string, unknown> | undefined : undefined;
+    return typeof attachment?.type === 'string' ? attachment.type : undefined;
+  })(),
   statusHistory: []
 });
 
@@ -472,5 +554,3 @@ export const formatRelativeTime = (value: Date) => {
 
   return formatDateTime(value);
 };
-
-export const createDemoPayload = () => demoFixtures;

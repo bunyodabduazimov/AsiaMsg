@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'overview' as ActiveView, labelRu: 'Обзор', labelEn: 'Overview', icon: LayoutDashboard },
     { id: 'instances' as ActiveView, labelRu: 'Инстансы', labelEn: 'Instances', icon: Layers },
     { id: 'messages' as ActiveView, labelRu: 'Сообщения', labelEn: 'Messages', icon: MessageSquare },
-    { id: 'tokens' as ActiveView, labelRu: 'API токены', labelEn: 'API Tokens', icon: Key },
+    { id: 'tokens' as ActiveView, labelRu: 'Документы API', labelEn: 'API Docs', icon: Key },
     { id: 'webhooks' as ActiveView, labelRu: 'Webhooks', labelEn: 'Webhooks', icon: Webhook },
     { id: 'logs' as ActiveView, labelRu: 'Логи', labelEn: 'Logs', icon: FileText },
     { id: 'settings' as ActiveView, labelRu: 'Настройки', labelEn: 'Settings', icon: Settings }

@@ -48,7 +48,7 @@ export class InstanceRepository {
       where: { id: instanceId },
       data: {
         status,
-        qrCode: qrCode ?? undefined
+        ...(qrCode !== undefined ? { qrCode } : {})
       },
       include: { session: true, settings: true }
     });

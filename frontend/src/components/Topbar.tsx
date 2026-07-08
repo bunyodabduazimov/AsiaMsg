@@ -22,6 +22,7 @@ interface TopbarProps {
   onLanguageChange: (lang: 'RU' | 'EN') => void;
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   onMenuClick: () => void;
+  onLogout: () => void;
 }
 
 type DropdownKey = 'language' | 'theme' | 'notifications' | null;
@@ -31,7 +32,8 @@ export const Topbar: React.FC<TopbarProps> = ({
   onSearchChange,
   onLanguageChange,
   onThemeChange,
-  onMenuClick
+  onMenuClick,
+  onLogout
 }) => {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -286,7 +288,14 @@ export const Topbar: React.FC<TopbarProps> = ({
                   </div>
 
                   <div className="mt-1.5 border-t border-slate-100 px-1 pt-1.5 dark:border-slate-800">
-                    <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onLogout();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    >
                       <LogOut className="h-4 w-4" />
                       {isRu ? 'Выйти' : 'Sign Out'}
                     </button>

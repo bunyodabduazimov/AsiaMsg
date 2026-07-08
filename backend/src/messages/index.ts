@@ -1,1 +1,1 @@
-export {};
+export { messageRouter } from './message.routes';
