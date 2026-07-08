@@ -6,7 +6,9 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
+  Loader2,
   MoreVertical,
+  Pencil,
   Plus,
   QrCode,
   RefreshCw,
@@ -14,6 +16,7 @@ import {
   Search,
   SquareCheckBig,
   SquareDashedMousePointer,
+  Trash2,
   X
 } from 'lucide-react';
 import { AppState, Instance } from '../../types';
@@ -26,7 +29,31 @@ interface InstancesViewProps {
   onAddNumberClick: () => void;
   onUpdateInstanceStatus: (id: string, status: Instance['status']) => void;
   onRequestInstanceQr: (id: string) => void;
+  onRenameInstance: (id: string, name: string) => void;
+  onDeleteInstance: (id: string) => void;
+  onUpdateInstanceSettings: (id: string, input: WebhookSettingsInput) => void;
+  actionLoading?: boolean;
 }
+
+type WebhookSettingsInput = {
+  webhookUrl?: string | null;
+  webhookRetryCount?: number;
+  webhookOnReceived?: boolean;
+  webhookOnCreate?: boolean;
+  webhookOnAck?: boolean;
+  webhookDownloadMedia?: boolean;
+  webhookOnReaction?: boolean;
+};
+
+type WebhookSettingsDraft = {
+  webhookUrl: string;
+  webhookRetryCount: number;
+  webhookOnReceived: boolean;
+  webhookOnCreate: boolean;
+  webhookOnAck: boolean;
+  webhookDownloadMedia: boolean;
+  webhookOnReaction: boolean;
+};
 
 export const InstancesView: React.FC<InstancesViewProps> = ({
   state,
@@ -34,7 +61,11 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   onSelectInstance,
   onAddNumberClick,
   onUpdateInstanceStatus,
-  onRequestInstanceQr
+  onRequestInstanceQr,
+  onRenameInstance,
+  onDeleteInstance,
+  onUpdateInstanceSettings,
+  actionLoading = false
 }) => {
   const isRu = state.language === 'RU';
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +73,18 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   const [openMenuStyle, setOpenMenuStyle] = useState<React.CSSProperties | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingInstance, setEditingInstance] = useState<Instance | null>(null);
+  const [deletingInstance, setDeletingInstance] = useState<Instance | null>(null);
+  const [editName, setEditName] = useState('');
+  const [webhookDraft, setWebhookDraft] = useState<WebhookSettingsDraft>({
+    webhookUrl: '',
+    webhookRetryCount: 3,
+    webhookOnReceived: false,
+    webhookOnCreate: false,
+    webhookOnAck: false,
+    webhookDownloadMedia: false,
+    webhookOnReaction: false
+  });
 
   const itemsPerPage = 10;
   const selectedInstance = state.instances.find(item => item.id === state.selectedInstanceId) || null;
@@ -81,9 +124,10 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   };
 
   const openActions = (id: string, triggerEl: HTMLButtonElement) => {
+    if (actionLoading) return;
     const rect = triggerEl.getBoundingClientRect();
     const menuWidth = 224;
-    const menuHeight = 240;
+    const menuHeight = 128;
     const canOpenDown = rect.bottom + menuHeight + 12 <= window.innerHeight;
     const top = canOpenDown
       ? Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 8)
@@ -123,9 +167,86 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     };
   }, [openMenuId]);
 
+  useEffect(() => {
+    if (!selectedInstance) return;
+
+    setWebhookDraft({
+      webhookUrl: selectedInstance.webhookUrl || '',
+      webhookRetryCount: selectedInstance.webhookRetryCount ?? 3,
+      webhookOnReceived: selectedInstance.webhookOnReceived ?? false,
+      webhookOnCreate: selectedInstance.webhookOnCreate ?? false,
+      webhookOnAck: selectedInstance.webhookOnAck ?? false,
+      webhookDownloadMedia: selectedInstance.webhookDownloadMedia ?? false,
+      webhookOnReaction: selectedInstance.webhookOnReaction ?? false
+    });
+  }, [
+    selectedInstance?.id,
+    selectedInstance?.webhookUrl,
+    selectedInstance?.webhookRetryCount,
+    selectedInstance?.webhookOnReceived,
+    selectedInstance?.webhookOnCreate,
+    selectedInstance?.webhookOnAck,
+    selectedInstance?.webhookDownloadMedia,
+    selectedInstance?.webhookOnReaction
+  ]);
+
   const runStatusAction = (id: string, status: Instance['status']) => {
+    if (actionLoading) return;
     closeActions();
     onUpdateInstanceStatus(id, status);
+  };
+
+  const openRenameDialog = (instance: Instance) => {
+    if (actionLoading) return;
+    setEditingInstance(instance);
+    setEditName(instance.name);
+    closeActions();
+  };
+
+  const closeRenameDialog = () => {
+    setEditingInstance(null);
+    setEditName('');
+  };
+
+  const openDeleteDialog = (instance: Instance) => {
+    if (actionLoading) return;
+    setDeletingInstance(instance);
+    closeActions();
+  };
+
+  const closeDeleteDialog = () => {
+    if (actionLoading) return;
+    setDeletingInstance(null);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingInstance || actionLoading) return;
+    onDeleteInstance(deletingInstance.id);
+    setDeletingInstance(null);
+  };
+
+  const submitRename = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (actionLoading || !editingInstance || !editName.trim()) return;
+    onRenameInstance(editingInstance.id, editName.trim());
+    closeRenameDialog();
+  };
+
+  const submitWebhookSettings = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedInstance || actionLoading) return;
+
+    onUpdateInstanceSettings(selectedInstance.id, {
+      ...webhookDraft,
+      webhookUrl: webhookDraft.webhookUrl.trim() || null,
+      webhookRetryCount: Number.isFinite(webhookDraft.webhookRetryCount)
+        ? Math.max(0, Math.min(10, webhookDraft.webhookRetryCount))
+        : 3
+    });
+  };
+
+  const setWebhookFlag = (key: keyof Omit<WebhookSettingsDraft, 'webhookUrl' | 'webhookRetryCount'>) => {
+    setWebhookDraft(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const renderDetailPage = () => {
@@ -172,9 +293,10 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               <button
                 type="button"
                 onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <RefreshCw className="h-4 w-4" />
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {isRu ? 'Обновить' : 'Refresh'}
               </button>
             </div>
@@ -234,25 +356,28 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               <button
                 type="button"
                 onClick={() => onRequestInstanceQr(selectedInstance.id)}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <SquareCheckBig className="h-4 w-4" />
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareCheckBig className="h-4 w-4" />}
                 {isRu ? 'Подключить' : 'Connect'}
               </button>
               <button
                 type="button"
                 onClick={() => runStatusAction(selectedInstance.id, 'Waiting QR')}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <QrCode className="h-4 w-4" />
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
                 {isRu ? 'Получить QR' : 'Get QR'}
               </button>
               <button
                 type="button"
                 onClick={() => runStatusAction(selectedInstance.id, 'Disconnected')}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-50"
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SquareDashedMousePointer className="h-4 w-4" />
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
                 {isRu ? 'Отключить' : 'Disconnect'}
               </button>
             </div>
@@ -309,15 +434,117 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  disabled={actionLoading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <RotateCcw className="h-4 w-4 text-amber-500" />
+                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin text-amber-500" /> : <RotateCcw className="h-4 w-4 text-amber-500" />}
                   {isRu ? 'Перезапуск' : 'Reconnect'}
                 </button>
               </div>
             </div>
           </div>
         </div>
+
+        <form
+          onSubmit={submitWebhookSettings}
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+                {isRu ? 'Webhook настройки' : 'Webhook settings'}
+              </p>
+              <h2 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                {isRu ? 'Настройки веб-перехватчика' : 'Webhook delivery settings'}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isRu
+                  ? 'Укажите URL и события, которые нужно отправлять во внешнюю систему.'
+                  : 'Set the URL and events that should be sent to an external system.'}
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={actionLoading}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {actionLoading ? (isRu ? 'Сохранение...' : 'Saving...') : (isRu ? 'Сохранить' : 'Save')}
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-4">
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {isRu ? 'URL-адрес веб-перехватчика' : 'Webhook URL'}
+                </span>
+                <input
+                  type="url"
+                  value={webhookDraft.webhookUrl}
+                  onChange={event => setWebhookDraft(prev => ({ ...prev, webhookUrl: event.target.value }))}
+                  placeholder="https://example.com/webhook"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {isRu ? 'Повторные попытки Webhook' : 'Webhook retry attempts'}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={webhookDraft.webhookRetryCount}
+                  onChange={event =>
+                    setWebhookDraft(prev => ({
+                      ...prev,
+                      webhookRetryCount: Number(event.target.value)
+                    }))
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                />
+                <p className="text-xs text-slate-400">
+                  {isRu ? 'Допустимое значение: от 0 до 10 попыток.' : 'Allowed value: from 0 to 10 attempts.'}
+                </p>
+              </label>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isRu ? 'События' : 'Events'}
+              </p>
+              <div className="mt-3 space-y-3">
+                <WebhookToggle
+                  label="Webhook on Received"
+                  checked={webhookDraft.webhookOnReceived}
+                  onChange={() => setWebhookFlag('webhookOnReceived')}
+                />
+                <WebhookToggle
+                  label="Webhook on Create"
+                  checked={webhookDraft.webhookOnCreate}
+                  onChange={() => setWebhookFlag('webhookOnCreate')}
+                />
+                <WebhookToggle
+                  label="Webhook on ACK"
+                  checked={webhookDraft.webhookOnAck}
+                  onChange={() => setWebhookFlag('webhookOnAck')}
+                />
+                <WebhookToggle
+                  label="Webhook Download Media"
+                  checked={webhookDraft.webhookDownloadMedia}
+                  onChange={() => setWebhookFlag('webhookDownloadMedia')}
+                />
+                <WebhookToggle
+                  label="Webhook On Reaction"
+                  checked={webhookDraft.webhookOnReaction}
+                  onChange={() => setWebhookFlag('webhookOnReaction')}
+                />
+              </div>
+            </div>
+          </div>
+        </form>
       </div>
     );
   };
@@ -336,7 +563,8 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
 
         <button
           onClick={onAddNumberClick}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          disabled={actionLoading}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus className="h-4 w-4" />
           <span>{isRu ? 'Добавить' : 'Add'}</span>
@@ -368,10 +596,10 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                   runStatusAction(state.selectedInstanceId, 'Reconnecting');
                 }
               }}
-              disabled={!state.selectedInstanceId}
+              disabled={!state.selectedInstanceId || actionLoading}
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              <RefreshCw className="h-4 w-4" />
+              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {isRu ? 'Обновить' : 'Refresh'}
             </button>
           </div>
@@ -428,10 +656,11 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                         <button
                           type="button"
                           onClick={(e) => openActions(item.id, e.currentTarget)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-blue-600 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                          disabled={actionLoading}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-blue-400"
                           aria-label={isRu ? 'Открыть действия' : 'Open actions'}
                         >
-                          <MoreVertical className="h-4 w-4" />
+                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
                         </button>
                       </div>
                     </td>
@@ -521,41 +750,136 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               >
                 <div className="p-2">
                   <MenuItem
-                    label={isRu ? 'Получить QR' : 'Get QR'}
-                    icon={<QrCode className="h-4 w-4" />}
+                    label={isRu ? 'Изменить' : 'Edit'}
+                    icon={<Pencil className="h-4 w-4" />}
                     onClick={() => {
-                      onRequestInstanceQr(openMenuInstance.id);
-                      closeActions();
+                      openRenameDialog(openMenuInstance);
                     }}
+                    disabled={actionLoading}
                   />
                   <MenuItem
-                    label={isRu ? 'Переподключить' : 'Reconnect'}
-                    icon={<RotateCcw className="h-4 w-4" />}
+                    label={isRu ? 'Удалить' : 'Delete'}
+                    icon={<Trash2 className="h-4 w-4" />}
                     onClick={() => {
-                      runStatusAction(openMenuInstance.id, 'Reconnecting');
-                      closeActions();
+                      openDeleteDialog(openMenuInstance);
                     }}
-                  />
-                  <MenuItem
-                    label={isRu ? 'Открыть WhatsApp Web' : 'Open WhatsApp Web'}
-                    icon={<ExternalLink className="h-4 w-4" />}
-                    onClick={() => {
-                      window.open('https://web.whatsapp.com', '_blank', 'noreferrer');
-                      closeActions();
-                    }}
-                  />
-                  <MenuItem
-                    label={isRu ? 'Отключить' : 'Disconnect'}
-                    icon={<SquareDashedMousePointer className="h-4 w-4" />}
-                    onClick={() => {
-                      runStatusAction(openMenuInstance.id, 'Disconnected');
-                      closeActions();
-                    }}
+                    disabled={actionLoading}
                     danger
                   />
                 </div>
               </div>
             </>,
+            document.body
+          )
+        : null}
+      {editingInstance && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <form
+                onSubmit={submitRename}
+                className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {isRu ? 'Изменить инстанс' : 'Edit instance'}
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {isRu ? 'Измените название инстанса.' : 'Update the instance name.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeRenameDialog}
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Закрыть' : 'Close'}
+                  </button>
+                </div>
+
+                <label className="mt-5 block space-y-2">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                    {isRu ? 'Название' : 'Name'}
+                  </span>
+                  <input
+                    value={editName}
+                    onChange={event => setEditName(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    autoFocus
+                  />
+                </label>
+
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeRenameDialog}
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Отмена' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!editName.trim() || actionLoading}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {actionLoading ? (isRu ? 'Сохранение...' : 'Saving...') : (isRu ? 'Сохранить' : 'Save')}
+                  </button>
+                </div>
+              </form>
+            </div>,
+            document.body
+          )
+        : null}
+      {deletingInstance && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {isRu ? 'Удалить инстанс?' : 'Delete instance?'}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {isRu
+                        ? `Инстанс "${deletingInstance.name}" будет скрыт из аккаунта, а WhatsApp-сессия будет остановлена.`
+                        : `Instance "${deletingInstance.name}" will be hidden from the account and its WhatsApp session will be stopped.`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+                  {isRu
+                    ? 'Это мягкое удаление: запись получит deletedAt и пропадёт из списка.'
+                    : 'This is a soft delete: the row gets deletedAt and disappears from the list.'}
+                </div>
+
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeDeleteDialog}
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Отмена' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={actionLoading}
+                    className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {actionLoading ? (isRu ? 'Удаление...' : 'Deleting...') : (isRu ? 'Удалить' : 'Delete')}
+                  </button>
+                </div>
+              </div>
+            </div>,
             document.body
           )
         : null}
@@ -593,19 +917,48 @@ type MenuItemProps = {
   icon: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 };
 
-const MenuItem: React.FC<MenuItemProps> = ({ label, icon, onClick, danger }) => (
+const MenuItem: React.FC<MenuItemProps> = ({ label, icon, onClick, danger, disabled }) => (
   <button
     type="button"
     onClick={onClick}
+    disabled={disabled}
     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
       danger
         ? 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30'
         : 'text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'
-    }`}
+    } disabled:cursor-not-allowed disabled:opacity-50`}
   >
     <span className={danger ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400'}>{icon}</span>
     <span>{label}</span>
+  </button>
+);
+
+type WebhookToggleProps = {
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+};
+
+const WebhookToggle: React.FC<WebhookToggleProps> = ({ label, checked, onChange }) => (
+  <button
+    type="button"
+    onClick={onChange}
+    className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+  >
+    <span>{label}</span>
+    <span
+      className={`relative h-6 w-11 rounded-full transition ${
+        checked ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
+      }`}
+    >
+      <span
+        className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${
+          checked ? 'left-6' : 'left-1'
+        }`}
+      />
+    </span>
   </button>
 );

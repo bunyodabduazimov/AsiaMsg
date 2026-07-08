@@ -54,6 +54,7 @@ model Instance {
   qrCode       String?          @db.LongText
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+  deletedAt    DateTime?
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   session      InstanceSession?
   apiTokens    ApiToken[]
@@ -63,6 +64,7 @@ model Instance {
   logs         InstanceLog[]
 
   @@index([userId, status])
+  @@index([userId, deletedAt])
 }
 
 model InstanceSession {
@@ -93,6 +95,12 @@ model InstanceSetting {
   instanceId            String   @unique
   webhookUrl            String?
   webhookSecret         String?
+  webhookRetryCount     Int      @default(3)
+  webhookOnReceived     Boolean  @default(false)
+  webhookOnCreate       Boolean  @default(false)
+  webhookOnAck          Boolean  @default(false)
+  webhookDownloadMedia  Boolean  @default(false)
+  webhookOnReaction     Boolean  @default(false)
   autoReconnect         Boolean  @default(true)
   storeIncomingMessages Boolean  @default(true)
   storeOutgoingMessages Boolean  @default(true)

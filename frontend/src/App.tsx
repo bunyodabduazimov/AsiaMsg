@@ -37,6 +37,7 @@ import {
   clearStoredConnection,
   connectBackendInstance,
   createBackendInstance,
+  deleteBackendInstance,
   disconnectBackendInstance,
   buildWebhookItems,
   fetchBackendInstance,
@@ -53,8 +54,11 @@ import {
   mapBackendTokenToUi,
   mapBackendLogToUi,
   sendBackendMessage,
+  updateBackendInstance,
+  updateBackendInstanceSettings,
   updateBackendInstanceStatus,
   ApiError,
+  type BackendInstanceSettingsInput,
   type BackendUser
 } from './lib/api';
 
@@ -154,12 +158,13 @@ export default function App() {
   const [newNumProvider, setNewNumProvider] = useState('Baileys');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(
-    typeof window !== 'undefined' && window.location.pathname === '/login' && !storedConnection.accessToken
+    !storedConnection.accessToken
   );
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authName, setAuthName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -187,7 +192,7 @@ export default function App() {
       }
 
       const nextInstanceId = getInstanceIdFromPath(window.location.pathname);
-      setShowAuthModal(false);
+      setShowAuthModal(!accessToken);
       setState(prev => ({
         ...prev,
         activeView: getViewFromPath(window.location.pathname),
@@ -201,12 +206,9 @@ export default function App() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/login' && !accessToken) {
+    if (!accessToken) {
       setShowAuthModal(true);
       setShowAddNumberModal(false);
-    }
-
-    if (!accessToken) {
       setBackendUser(null);
       setBackendError(null);
       setState(prev => ({
@@ -249,6 +251,7 @@ export default function App() {
 
         if (!isMounted) return;
 
+        const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
         setBackendUser(dashboard.user);
         setState(prev => ({
           ...prev,
@@ -264,7 +267,9 @@ export default function App() {
           tokens,
           webhooks,
           logs,
-          selectedInstanceId: instances[0]?.id ?? null,
+          selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
+            ? routeInstanceId
+            : null,
           selectedMessageId: messages[0]?.id ?? null,
           selectedTokenId: tokens[0]?.id ?? null,
           selectedWebhookId: webhooks[0]?.id ?? null,
@@ -297,7 +302,7 @@ export default function App() {
     setState(prev => ({
       ...prev,
       activeView: view,
-      selectedInstanceId: view === 'instances' ? prev.selectedInstanceId : prev.selectedInstanceId,
+      selectedInstanceId: view === 'instances' ? null : prev.selectedInstanceId,
       selectedMessageId: prev.selectedMessageId,
       selectedTokenId: prev.selectedTokenId,
       selectedWebhookId: prev.selectedWebhookId,
@@ -363,6 +368,7 @@ export default function App() {
     const tokens = dashboard.tokens.map(mapBackendTokenToUi);
     const webhooks = buildWebhookItems(dashboard.instances, dashboard.webhookLogs);
     const logs = dashboard.logs.map(mapBackendLogToUi);
+    const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
 
     setBackendUser(dashboard.user);
     setState(prev => ({
@@ -379,7 +385,9 @@ export default function App() {
       tokens,
       webhooks,
       logs,
-      selectedInstanceId: instances[0]?.id ?? null,
+      selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
+        ? routeInstanceId
+        : null,
       selectedMessageId: messages[0]?.id ?? null,
       selectedTokenId: tokens[0]?.id ?? null,
       selectedWebhookId: webhooks[0]?.id ?? null,
@@ -517,8 +525,10 @@ export default function App() {
   const handleAddNumberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNumName.trim() || !newNumPhone.trim()) return;
+    if (pendingAction) return;
 
     try {
+      setPendingAction('instance:create');
       const created = await createBackendInstance(apiBaseUrl, accessToken, {
         name: newNumName.trim(),
         phoneNumber: newNumPhone.trim()
@@ -542,16 +552,20 @@ export default function App() {
       }
       const message = error instanceof Error ? error.message : 'Failed to create instance';
       triggerToast(message);
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleUpdateInstanceStatus = async (id: string, status: Instance['status']) => {
+    if (pendingAction) return;
     if (!accessToken) {
       handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
       return;
     }
 
     try {
+      setPendingAction(`instance:status:${id}`);
       if (status === 'Connected' || status === 'Waiting QR' || status === 'Reconnecting') {
         const updated = await connectBackendInstance(apiBaseUrl, accessToken, id);
         setState(prev => ({
@@ -595,16 +609,20 @@ export default function App() {
       }
       const message = error instanceof Error ? error.message : 'Failed to sync instance status';
       triggerToast(message);
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleRequestInstanceQr = async (id: string) => {
+    if (pendingAction) return;
     if (!accessToken) {
       handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
       return;
     }
 
     try {
+      setPendingAction(`instance:qr:${id}`);
       const updated = await fetchBackendInstanceQr(apiBaseUrl, accessToken, id);
       setState(prev => ({
         ...prev,
@@ -619,6 +637,111 @@ export default function App() {
       }
       const message = error instanceof Error ? error.message : 'Failed to get QR';
       triggerToast(message);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleRenameInstance = async (id: string, name: string) => {
+    if (pendingAction) return;
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+      return;
+    }
+
+    try {
+      setPendingAction(`instance:rename:${id}`);
+      const updated = await updateBackendInstance(apiBaseUrl, accessToken, id, { name });
+      setState(prev => ({
+        ...prev,
+        instances: prev.instances.map(item => (item.id === id ? { ...item, ...updated } : item))
+      }));
+      triggerToast(state.language === 'RU' ? 'Название инстанса изменено' : 'Instance name updated');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to update instance';
+      triggerToast(message);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleUpdateInstanceSettings = async (id: string, input: BackendInstanceSettingsInput) => {
+    if (pendingAction) return;
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+      return;
+    }
+
+    try {
+      setPendingAction(`instance:settings:${id}`);
+      const updated = await updateBackendInstanceSettings(apiBaseUrl, accessToken, id, input);
+      setState(prev => ({
+        ...prev,
+        instances: prev.instances.map(item => (item.id === id ? { ...item, ...updated } : item))
+      }));
+      triggerToast(state.language === 'RU' ? 'Webhook настройки сохранены' : 'Webhook settings saved');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to update webhook settings';
+      triggerToast(message);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleDeleteInstance = async (id: string) => {
+    if (pendingAction) return;
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+      return;
+    }
+
+    try {
+      setPendingAction(`instance:delete:${id}`);
+      await deleteBackendInstance(apiBaseUrl, accessToken, id);
+      setState(prev => {
+        const deleted = prev.instances.find(item => item.id === id);
+        const instances = prev.instances.filter(item => item.id !== id);
+        const messages = prev.messages.filter(item => item.instanceId !== id);
+        const tokens = prev.tokens.filter(item => item.instance !== deleted?.name);
+        const webhooks = prev.webhooks.filter(item => item.instance !== deleted?.name);
+        const logs = prev.logs.filter(item => item.resource !== id && item.resource !== deleted?.name);
+        const selectedInstanceId = prev.selectedInstanceId === id ? instances[0]?.id ?? null : prev.selectedInstanceId;
+
+        return {
+          ...prev,
+          instances,
+          messages,
+          tokens,
+          webhooks,
+          logs,
+          selectedInstanceId,
+          selectedMessageId: messages[0]?.id ?? null,
+          selectedTokenId: tokens[0]?.id ?? null,
+          selectedWebhookId: webhooks[0]?.id ?? null,
+          selectedLogId: logs[0]?.id ?? null
+        };
+      });
+      if (state.selectedInstanceId === id) {
+        pushRoute('/instances');
+      }
+      triggerToast(state.language === 'RU' ? 'Инстанс удалён' : 'Instance deleted');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to delete instance';
+      triggerToast(message);
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -750,6 +873,10 @@ export default function App() {
           onAddNumberClick={() => setShowAddNumberModal(true)}
           onUpdateInstanceStatus={handleUpdateInstanceStatus}
           onRequestInstanceQr={handleRequestInstanceQr}
+          onRenameInstance={handleRenameInstance}
+          onDeleteInstance={handleDeleteInstance}
+          onUpdateInstanceSettings={handleUpdateInstanceSettings}
+          actionLoading={pendingAction !== null}
         />
         );
       case 'messages':
@@ -1183,8 +1310,11 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]">
           <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
             <button
-              onClick={() => setShowAddNumberModal(false)}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+              onClick={() => {
+                if (!pendingAction) setShowAddNumberModal(false);
+              }}
+              disabled={pendingAction !== null}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               ×
             </button>
@@ -1240,16 +1370,18 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowAddNumberModal(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                  disabled={pendingAction !== null}
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
+                  disabled={pendingAction !== null}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>Подключить</span>
+                  <span>{pendingAction === 'instance:create' ? 'Подключение...' : 'Подключить'}</span>
                 </button>
               </div>
             </form>

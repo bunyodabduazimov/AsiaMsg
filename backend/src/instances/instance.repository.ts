@@ -4,7 +4,7 @@ import { prisma } from '../database';
 export class InstanceRepository {
   listByUser(userId: string) {
     return prisma.instance.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       include: { session: true, settings: true },
       orderBy: { createdAt: 'desc' }
     });
@@ -19,7 +19,7 @@ export class InstanceRepository {
 
   findByIdAndUser(instanceId: string, userId: string) {
     return prisma.instance.findFirst({
-      where: { id: instanceId, userId },
+      where: { id: instanceId, userId, deletedAt: null },
       include: { session: true, settings: true }
     });
   }
@@ -62,6 +62,21 @@ export class InstanceRepository {
     });
   }
 
+  updateSettings(instanceId: string, data: Prisma.InstanceSettingUpdateInput) {
+    return prisma.instance.update({
+      where: { id: instanceId },
+      data: {
+        settings: {
+          upsert: {
+            create: data as Prisma.InstanceSettingCreateWithoutInstanceInput,
+            update: data
+          }
+        }
+      },
+      include: { session: true, settings: true }
+    });
+  }
+
   upsertSession(instanceId: string, authState: Prisma.InputJsonValue) {
     return prisma.instanceSession.upsert({
       where: { instanceId },
@@ -74,6 +89,24 @@ export class InstanceRepository {
         authState,
         lastSyncedAt: new Date()
       }
+    });
+  }
+
+  deleteSession(instanceId: string) {
+    return prisma.instanceSession.deleteMany({
+      where: { instanceId }
+    });
+  }
+
+  softDelete(instanceId: string) {
+    return prisma.instance.update({
+      where: { id: instanceId },
+      data: {
+        deletedAt: new Date(),
+        status: 'DISCONNECTED',
+        qrCode: null
+      },
+      include: { session: true, settings: true }
     });
   }
 

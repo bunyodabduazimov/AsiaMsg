@@ -34,6 +34,12 @@ export interface BackendInstance {
   updatedAt: string;
   settings?: {
     webhookUrl?: string | null;
+    webhookRetryCount?: number | null;
+    webhookOnReceived?: boolean | null;
+    webhookOnCreate?: boolean | null;
+    webhookOnAck?: boolean | null;
+    webhookDownloadMedia?: boolean | null;
+    webhookOnReaction?: boolean | null;
   } | null;
 }
 
@@ -57,7 +63,10 @@ export interface CreateBackendMessageInput {
   instanceId: string;
   remoteJid: string;
   messageText: string;
-  messageType: 'text' | 'file';
+  messageType: 'text' | 'file' | 'image' | 'document';
+  imageUrl?: string;
+  documentUrl?: string;
+  fileName?: string;
   attachment?: {
     name: string;
     type: string;
@@ -144,6 +153,16 @@ export interface BackendConnectionInfo {
 export interface BackendInstanceInput {
   name: string;
   phoneNumber?: string | null;
+}
+
+export interface BackendInstanceSettingsInput {
+  webhookUrl?: string | null;
+  webhookRetryCount?: number;
+  webhookOnReceived?: boolean;
+  webhookOnCreate?: boolean;
+  webhookOnAck?: boolean;
+  webhookDownloadMedia?: boolean;
+  webhookOnReaction?: boolean;
 }
 
 export class ApiError extends Error {
@@ -275,6 +294,28 @@ export const createBackendInstance = (
     body: JSON.stringify(input)
   }, accessToken).then(mapBackendInstanceToUi);
 
+export const updateBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string,
+  input: BackendInstanceInput
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  }, accessToken).then(mapBackendInstanceToUi);
+
+export const updateBackendInstanceSettings = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string,
+  input: BackendInstanceSettingsInput
+) =>
+  fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  }, accessToken).then(mapBackendInstanceToUi);
+
 export const updateBackendInstanceStatus = (
   apiBaseUrl: string,
   accessToken: string,
@@ -307,6 +348,15 @@ export const disconnectBackendInstance = (
   fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/disconnect`, {
     method: 'POST'
   }, accessToken).then(mapBackendInstanceToUi);
+
+export const deleteBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<void>(apiBaseUrl, `/api/instances/${instanceId}`, {
+    method: 'DELETE'
+  }, accessToken);
 
 export const fetchBackendInstanceQr = (
   apiBaseUrl: string,
@@ -347,6 +397,12 @@ export const mapBackendInstanceToUi = (item: BackendInstance): Instance => {
     qrCode: item.qrCode || '',
     qrExpiresAt: item.qrExpiresAt || undefined,
     webhookUrl: item.settings?.webhookUrl || undefined,
+    webhookRetryCount: item.settings?.webhookRetryCount ?? 3,
+    webhookOnReceived: item.settings?.webhookOnReceived ?? false,
+    webhookOnCreate: item.settings?.webhookOnCreate ?? false,
+    webhookOnAck: item.settings?.webhookOnAck ?? false,
+    webhookDownloadMedia: item.settings?.webhookDownloadMedia ?? false,
+    webhookOnReaction: item.settings?.webhookOnReaction ?? false,
     createdDate: formatDateTime(createdAt)
   };
 };

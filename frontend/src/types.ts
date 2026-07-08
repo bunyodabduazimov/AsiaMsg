@@ -13,6 +13,12 @@ export interface Instance {
   qrCode?: string;
   qrExpiresAt?: string;
   webhookUrl?: string;
+  webhookRetryCount?: number;
+  webhookOnReceived?: boolean;
+  webhookOnCreate?: boolean;
+  webhookOnAck?: boolean;
+  webhookDownloadMedia?: boolean;
+  webhookOnReaction?: boolean;
   createdDate?: string;
 }
 

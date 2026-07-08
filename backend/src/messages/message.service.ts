@@ -3,6 +3,7 @@ import { AppError } from '../middleware/error-handler';
 import { instanceService } from '../instances/instance.service';
 import { baileysManager } from '../providers/whatsapp/baileys.manager';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { createMessageSchema } from './message.schemas';
 
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;
@@ -15,7 +16,16 @@ export class MessageService {
       throw new AppError('Instance not found', 404);
     }
 
-    if (!baileysManager.isRunning(instance.id) || instance.status !== 'CONNECTED') {
+    if (!baileysManager.isRunning(instance.id) && instance.session) {
+      await baileysManager.connect(instance);
+      await baileysManager.waitForConnected(instance.id, 30000);
+    }
+
+    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
+      await baileysManager.waitForConnected(instance.id, 30000);
+    }
+
+    if (!baileysManager.isRunning(instance.id) || baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
       throw new AppError('WhatsApp instance is not connected', 409);
     }
 
@@ -40,9 +50,24 @@ export class MessageService {
       }
 
       const imageAsset = await this.downloadRemoteFile(input.imageUrl);
+      if (!imageAsset.mimeType.startsWith('image/')) {
+        throw new AppError('Image URL must point to an image', 400);
+      }
       sentMessage = await baileysManager.sendMessage(instance.id, input.remoteJid, {
         image: imageAsset.buffer,
         mimetype: imageAsset.mimeType,
+        caption: input.messageText
+      });
+    } else if (input.messageType === 'document') {
+      if (!input.documentUrl) {
+        throw new AppError('Document URL is required', 400);
+      }
+
+      const documentAsset = await this.downloadRemoteFile(input.documentUrl);
+      sentMessage = await baileysManager.sendMessage(instance.id, input.remoteJid, {
+        document: documentAsset.buffer,
+        fileName: input.fileName || documentAsset.fileName,
+        mimetype: documentAsset.mimeType,
         caption: input.messageText
       });
     } else {
@@ -52,27 +77,35 @@ export class MessageService {
     }
 
     const messageId = sentMessage?.key?.id || sentMessage?.messageId || `msg-${Date.now()}`;
-    const payload = {
-      text: input.messageText,
-      type: input.messageType,
-      attachment: attachment
-        ? {
-            name: attachment.name,
-            type: attachment.type,
-            size: attachment.size
-          }
-        : null
+    const whatsappRemoteJid = sentMessage?.key?.remoteJid || this.normalizeRemoteJid(input.remoteJid);
+    const whatsappTimestamp = this.parseWhatsAppTimestamp(sentMessage?.messageTimestamp);
+    const payload: Prisma.InputJsonValue = {
+      request: {
+        text: input.messageText,
+        type: input.messageType,
+        imageUrl: input.imageUrl ?? null,
+        documentUrl: input.documentUrl ?? null,
+        fileName: input.fileName ?? null,
+        attachment: attachment
+          ? {
+              name: attachment.name,
+              type: attachment.type,
+              size: attachment.size
+            }
+          : null
+      },
+      whatsappResponse: this.serializeWhatsAppResponse(sentMessage)
     };
 
     return prisma.message.create({
       data: {
         instanceId: instance.id,
         direction: 'outbound',
-        remoteJid: input.remoteJid,
+        remoteJid: whatsappRemoteJid,
         messageId,
         payload,
         status: 'sent',
-        sentAt: new Date()
+        sentAt: whatsappTimestamp ?? new Date()
       },
       include: {
         instance: {
@@ -91,32 +124,69 @@ export class MessageService {
     try {
       parsedUrl = new URL(url);
     } catch {
-      throw new AppError('Image URL is invalid', 400);
+      throw new AppError('File URL is invalid', 400);
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new AppError('Image URL must use http or https', 400);
+      throw new AppError('File URL must use http or https', 400);
     }
 
     const response = await fetch(parsedUrl);
     if (!response.ok) {
-      throw new AppError(`Failed to download image (${response.status})`, 400);
+      throw new AppError(`Failed to download file (${response.status})`, 400);
     }
 
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.startsWith('image/')) {
-      throw new AppError('Image URL must point to an image', 400);
-    }
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
 
     const buffer = Buffer.from(await response.arrayBuffer());
     if (!buffer.length) {
-      throw new AppError('Image download returned empty file', 400);
+      throw new AppError('File download returned empty content', 400);
     }
 
     return {
       buffer,
-      mimeType: contentType.split(';')[0] || 'image/jpeg'
+      mimeType: contentType.split(';')[0] || 'application/octet-stream',
+      fileName: this.getFileNameFromUrl(parsedUrl)
     };
+  }
+
+  private getFileNameFromUrl(url: URL) {
+    const lastSegment = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || '');
+    return lastSegment || `document-${Date.now()}`;
+  }
+
+  private normalizeRemoteJid(value: string) {
+    const trimmed = value.trim();
+    if (trimmed.includes('@')) {
+      return trimmed;
+    }
+
+    return `${trimmed.replace(/\D/g, '')}@s.whatsapp.net`;
+  }
+
+  private parseWhatsAppTimestamp(value: unknown) {
+    if (!value) return null;
+
+    const raw = typeof value === 'object' && value !== null && 'low' in value
+      ? Number((value as { low?: number }).low)
+      : Number(value);
+
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    return new Date(raw * 1000);
+  }
+
+  private serializeWhatsAppResponse(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value, (_key, item) => {
+      if (typeof item === 'bigint') {
+        return item.toString();
+      }
+
+      if (Buffer.isBuffer(item)) {
+        return item.toString('base64');
+      }
+
+      return item;
+    })) as Prisma.InputJsonValue;
   }
 }
 

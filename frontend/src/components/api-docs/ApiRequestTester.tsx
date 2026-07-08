@@ -10,10 +10,23 @@ type Props = {
   imageHint?: string;
   imageUrl?: string;
   onImageUrlChange?: (value: string) => void;
+  showDocumentField?: boolean;
+  documentUrlLabel?: string;
+  documentUrlPlaceholder?: string;
+  documentUrlHint?: string;
+  documentUrl?: string;
+  onDocumentUrlChange?: (value: string) => void;
+  fileNameLabel?: string;
+  fileNamePlaceholder?: string;
+  fileNameHint?: string;
+  fileName?: string;
+  onFileNameChange?: (value: string) => void;
   textLabel: string;
   textPlaceholder: string;
   textHint: string;
   sendLabel: string;
+  sendingLabel: string;
+  isSending: boolean;
   fieldSummary: string;
   remoteJid: string;
   messageText: string;
@@ -32,10 +45,23 @@ export const ApiRequestTester: React.FC<Props> = ({
   imageHint,
   imageUrl,
   onImageUrlChange,
+  showDocumentField,
+  documentUrlLabel,
+  documentUrlPlaceholder,
+  documentUrlHint,
+  documentUrl,
+  onDocumentUrlChange,
+  fileNameLabel,
+  fileNamePlaceholder,
+  fileNameHint,
+  fileName,
+  onFileNameChange,
   textLabel,
   textPlaceholder,
   textHint,
   sendLabel,
+  sendingLabel,
+  isSending,
   fieldSummary,
   remoteJid,
   messageText,
@@ -51,8 +77,9 @@ export const ApiRequestTester: React.FC<Props> = ({
           <input
             value={remoteJid}
             onChange={e => onRemoteJidChange(e.target.value)}
+            disabled={isSending}
             placeholder={numberPlaceholder}
-            className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
           />
           <div className="text-xs text-slate-400">{numberHint}</div>
         </label>
@@ -63,11 +90,40 @@ export const ApiRequestTester: React.FC<Props> = ({
             <input
               value={imageUrl ?? ''}
               onChange={e => onImageUrlChange?.(e.target.value)}
+              disabled={isSending}
               placeholder={imagePlaceholder}
-              className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
             <div className="text-xs text-slate-400">{imageHint}</div>
           </label>
+        ) : null}
+
+        {showDocumentField ? (
+          <>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{documentUrlLabel}</span>
+              <input
+                value={documentUrl ?? ''}
+                onChange={e => onDocumentUrlChange?.(e.target.value)}
+                disabled={isSending}
+                placeholder={documentUrlPlaceholder}
+                className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+              <div className="text-xs text-slate-400">{documentUrlHint}</div>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{fileNameLabel}</span>
+              <input
+                value={fileName ?? ''}
+                onChange={e => onFileNameChange?.(e.target.value)}
+                disabled={isSending}
+                placeholder={fileNamePlaceholder}
+                className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+              <div className="text-xs text-slate-400">{fileNameHint}</div>
+            </label>
+          </>
         ) : null}
 
         <label className="block space-y-2">
@@ -75,9 +131,10 @@ export const ApiRequestTester: React.FC<Props> = ({
           <textarea
             value={messageText}
             onChange={e => onMessageTextChange(e.target.value)}
+            disabled={isSending}
             rows={4}
             placeholder={textPlaceholder}
-            className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
           />
           <div className="text-xs text-slate-400">{textHint}</div>
         </label>
@@ -85,9 +142,10 @@ export const ApiRequestTester: React.FC<Props> = ({
         <button
           type="button"
           onClick={onSendClick}
-          className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          disabled={isSending}
+          className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {sendLabel}
+          {isSending ? sendingLabel : sendLabel}
         </button>
 
         <div className="pt-1 text-xs text-slate-400">{fieldSummary}</div>

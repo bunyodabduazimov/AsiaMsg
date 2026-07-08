@@ -8,3 +8,4 @@ messageRouter.use(authenticate);
 messageRouter.post('/', createMessage);
 messageRouter.post('/text', createMessage);
 messageRouter.post('/image', createMessage);
+messageRouter.post('/document', createMessage);

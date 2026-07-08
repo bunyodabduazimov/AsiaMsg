@@ -3,11 +3,13 @@ import { authenticate } from '../middleware/authenticate';
 import {
   connectInstance,
   createInstance,
+  deleteInstance,
   disconnectInstance,
   getInstance,
   getInstanceQr,
   listInstances,
   updateInstance,
+  updateInstanceSettings,
   updateInstanceStatus,
   updateInstancePhoneNumber
 } from './instance.controller';
@@ -20,7 +22,9 @@ instanceRouter.post('/', createInstance);
 instanceRouter.get('/:instanceId', getInstance);
 instanceRouter.patch('/:instanceId', updateInstance);
 instanceRouter.patch('/:instanceId/phone-number', updateInstancePhoneNumber);
+instanceRouter.patch('/:instanceId/settings', updateInstanceSettings);
 instanceRouter.patch('/:instanceId/status', updateInstanceStatus);
 instanceRouter.post('/:instanceId/connect', connectInstance);
 instanceRouter.post('/:instanceId/disconnect', disconnectInstance);
 instanceRouter.get('/:instanceId/qr', getInstanceQr);
+instanceRouter.delete('/:instanceId', deleteInstance);

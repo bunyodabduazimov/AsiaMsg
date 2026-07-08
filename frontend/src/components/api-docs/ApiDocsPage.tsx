@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ShieldCheck, ShieldOff } from 'lucide-react';
+import { KeyRound, ShieldCheck, ShieldOff } from 'lucide-react';
 import { ApiDocsSidebar } from './ApiDocsSidebar';
 import { ApiEndpointDetails } from './ApiEndpointDetails';
 import {
   apiDocsEndpoints,
   apiDocsGroups,
+  type ApiDocsEndpoint,
+  type ApiDocsGroup,
   type LocalizedApiDocsEndpoint,
   type LocalizedApiDocsField,
   type LocalizedApiDocsGroup,
@@ -21,19 +23,129 @@ type Props = {
 const draftStorageKey = 'asiamsg.apiDocs.chatDraft';
 const pickText = (text: LocalizedText, isRu: boolean) => (isRu ? text.ru : text.en);
 
+const authDocsGroups: ApiDocsGroup[] = [
+  { id: 'auth', title: { ru: 'Авторизация', en: 'Auth' }, icon: <KeyRound className="h-4 w-4" />, defaultOpen: true }
+];
+
+const authDocsEndpoints: ApiDocsEndpoint[] = [
+  {
+    id: 'auth-qr',
+    groupId: 'auth',
+    method: 'GET',
+    title: { ru: 'QR', en: 'QR' },
+    description: {
+      ru: 'Получить QR-код для авторизации WhatsApp.',
+      en: 'Get a QR code for WhatsApp authorization.'
+    },
+    path: '/api/instances/{instanceId}/qr',
+    backendPath: '/api/instances/{instanceId}/qr',
+    fields: [
+      {
+        name: 'instanceId',
+        type: 'string',
+        required: true,
+        description: { ru: 'ID инстанса', en: 'Instance ID' },
+        example: 'cmrbnksr60002u20sn3uch0z5'
+      }
+    ],
+    response: {
+      success: true,
+      data: { qrCode: 'data:image/png;base64,...', expiresAt: '2026-07-08T12:07:00.000Z' }
+    }
+  },
+  {
+    id: 'auth-status',
+    groupId: 'auth',
+    method: 'GET',
+    title: { ru: 'STATUS', en: 'STATUS' },
+    description: {
+      ru: 'Проверить текущий статус инстанса.',
+      en: 'Check the current instance status.'
+    },
+    path: '/api/instances/{instanceId}',
+    backendPath: '/api/instances/{instanceId}',
+    fields: [
+      {
+        name: 'instanceId',
+        type: 'string',
+        required: true,
+        description: { ru: 'ID инстанса', en: 'Instance ID' },
+        example: 'cmrbnksr60002u20sn3uch0z5'
+      }
+    ],
+    response: {
+      success: true,
+      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'CONNECTED', qrCode: null }
+    }
+  },
+  {
+    id: 'auth-connect',
+    groupId: 'auth',
+    method: 'POST',
+    title: { ru: 'CONNECT', en: 'CONNECT' },
+    description: {
+      ru: 'Запустить подключение инстанса и ожидать QR.',
+      en: 'Start instance connection and wait for QR.'
+    },
+    path: '/api/instances/{instanceId}/connect',
+    backendPath: '/api/instances/{instanceId}/connect',
+    fields: [
+      {
+        name: 'instanceId',
+        type: 'string',
+        required: true,
+        description: { ru: 'ID инстанса', en: 'Instance ID' },
+        example: 'cmrbnksr60002u20sn3uch0z5'
+      }
+    ],
+    response: {
+      success: true,
+      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'CONNECTING', qrCode: 'data:image/png;base64,...' }
+    }
+  },
+  {
+    id: 'auth-disconnect',
+    groupId: 'auth',
+    method: 'POST',
+    title: { ru: 'DISCONNECT', en: 'DISCONNECT' },
+    description: {
+      ru: 'Отключить WhatsApp-сессию инстанса.',
+      en: 'Disconnect the WhatsApp session of the instance.'
+    },
+    path: '/api/instances/{instanceId}/disconnect',
+    backendPath: '/api/instances/{instanceId}/disconnect',
+    fields: [
+      {
+        name: 'instanceId',
+        type: 'string',
+        required: true,
+        description: { ru: 'ID инстанса', en: 'Instance ID' },
+        example: 'cmrbnksr60002u20sn3uch0z5'
+      }
+    ],
+    response: {
+      success: true,
+      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'DISCONNECTED' }
+    }
+  }
+];
+
 export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
   const isRu = state.language === 'RU';
   const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
-  const [selectedId, setSelectedId] = useState(apiDocsEndpoints[0]?.id ?? '');
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ messages: true });
+  const [selectedId, setSelectedId] = useState(authDocsEndpoints[0]?.id ?? apiDocsEndpoints[0]?.id ?? '');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ auth: true, messages: true });
   const [authOpen, setAuthOpen] = useState(false);
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [remoteJid, setRemoteJid] = useState('+992922772244');
   const [messageText, setMessageText] = useState('Hello, this is a test message from AsiaMsg API Docs.');
   const [imageUrl, setImageUrl] = useState('https://png.pngtree.com/png-vector/20240827/ourmid/pngtree-purple-flower-and-leaves-frame-template-illustration-png-image_13588629.png');
+  const [documentUrl, setDocumentUrl] = useState('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+  const [fileName, setFileName] = useState('dummy.pdf');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [responseBodyJson, setResponseBodyJson] = useState<string | null>(null);
+  const [requestSending, setRequestSending] = useState(false);
 
   const selectedInstance = useMemo(() => {
     if (state.selectedInstanceId) {
@@ -44,7 +156,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
 
   const localizedGroups: LocalizedApiDocsGroup[] = useMemo(
     () =>
-      apiDocsGroups.map(group => ({
+      [...authDocsGroups, ...apiDocsGroups].map(group => ({
         ...group,
         title: pickText(group.title, isRu)
       })),
@@ -53,7 +165,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
 
   const localizedEndpoints: LocalizedApiDocsEndpoint[] = useMemo(
     () =>
-      apiDocsEndpoints.map(endpoint => ({
+      [...authDocsEndpoints, ...apiDocsEndpoints].map(endpoint => ({
         ...endpoint,
         title: pickText(endpoint.title, isRu),
         description: pickText(endpoint.description, isRu),
@@ -72,6 +184,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     [localizedEndpoints, selectedId]
   );
   const isImageEndpoint = selectedEndpoint?.id === 'messages-image';
+  const isDocumentEndpoint = selectedEndpoint?.id === 'messages-document';
 
   const fieldSummary = useMemo(
     () =>
@@ -127,8 +240,10 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
   };
 
   const sendPreview = async () => {
+    if (requestSending) return;
     saveDraft();
     const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
+    const isAuthEndpoint = selectedEndpoint.groupId === 'auth';
 
     if (!instanceId.trim() || !token.trim()) {
       setResponseBodyJson(
@@ -145,6 +260,31 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     }
 
     try {
+      setRequestSending(true);
+      if (isAuthEndpoint) {
+        const authPath = selectedEndpoint.backendPath
+          .replace('{instanceId}', encodeURIComponent(instanceId.trim()))
+          .replace(':instanceId', encodeURIComponent(instanceId.trim()));
+        const response = await fetch(`${apiBaseUrl}${authPath}`, {
+          method: selectedEndpoint.method,
+          headers: {
+            Authorization: `Bearer ${token.trim()}`
+          }
+        });
+
+        const rawText = await response.text();
+        let responsePayload: unknown = rawText;
+
+        try {
+          responsePayload = rawText ? JSON.parse(rawText) : { success: response.ok };
+        } catch {
+          responsePayload = rawText || { success: response.ok };
+        }
+
+        setResponseBodyJson(JSON.stringify(responsePayload, null, 2));
+        return;
+      }
+
       const payload = isImageEndpoint
         ? {
             instanceId: instanceId.trim(),
@@ -153,7 +293,16 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
             messageText: messageText.trim(),
             messageType: 'image'
           }
-        : {
+        : isDocumentEndpoint
+          ? {
+              instanceId: instanceId.trim(),
+              remoteJid: remoteJid.trim(),
+              documentUrl: documentUrl.trim(),
+              fileName: fileName.trim(),
+              messageText: messageText.trim(),
+              messageType: 'document'
+            }
+          : {
             instanceId: instanceId.trim(),
             remoteJid: remoteJid.trim(),
             messageText: messageText.trim(),
@@ -190,6 +339,8 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           2
         )
       );
+    } finally {
+      setRequestSending(false);
     }
   };
 
@@ -212,7 +363,9 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         requestTitle: 'Запрос',
         requestDescription: isImageEndpoint
           ? 'Поля для отправки изображения в WhatsApp чат.'
-          : 'Поля для отправки сообщения в WhatsApp чат.',
+          : isDocumentEndpoint
+            ? 'Поля для отправки документа в WhatsApp чат.'
+            : 'Поля для отправки сообщения в WhatsApp чат.',
         numberLabel: 'Номер',
         numberPlaceholder: '+992922772244',
         numberHint: 'remoteJid * string',
@@ -224,7 +377,14 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         imageUrlLabel: 'URL изображения',
         imageUrlPlaceholder: 'https://example.com/image.jpg',
         imageUrlHint: 'imageUrl * string',
+        documentUrlLabel: 'URL документа',
+        documentUrlPlaceholder: 'https://example.com/invoice.pdf',
+        documentUrlHint: 'documentUrl * string',
+        fileNameLabel: 'Имя файла',
+        fileNamePlaceholder: 'invoice.pdf',
+        fileNameHint: 'fileName string',
         sendLabel: 'Отправить',
+        sendingLabel: 'Отправка...',
         responseTitle: 'Ответ',
         responseDescription: 'Пример ответа после отправки сообщения.',
         curlTitle: 'cURL',
@@ -252,7 +412,9 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         requestTitle: 'Request',
         requestDescription: isImageEndpoint
           ? 'Fields for sending an image to WhatsApp chat.'
-          : 'Fields for sending a message to WhatsApp chat.',
+          : isDocumentEndpoint
+            ? 'Fields for sending a document to WhatsApp chat.'
+            : 'Fields for sending a message to WhatsApp chat.',
         numberLabel: 'Number',
         numberPlaceholder: '+992922772244',
         numberHint: 'remoteJid * string',
@@ -264,7 +426,14 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         imageUrlLabel: 'Image URL',
         imageUrlPlaceholder: 'https://example.com/image.jpg',
         imageUrlHint: 'imageUrl * string',
+        documentUrlLabel: 'Document URL',
+        documentUrlPlaceholder: 'https://example.com/invoice.pdf',
+        documentUrlHint: 'documentUrl * string',
+        fileNameLabel: 'File name',
+        fileNamePlaceholder: 'invoice.pdf',
+        fileNameHint: 'fileName string',
         sendLabel: 'Send',
+        sendingLabel: 'Sending...',
         responseTitle: 'Response',
         responseDescription: 'Example response after sending the message.',
         curlTitle: 'cURL request for Postman',
@@ -319,6 +488,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         <ApiEndpointDetails
           endpoint={selectedEndpoint}
           apiBaseUrl={apiBaseUrl}
+          isRu={isRu}
           requestTitle={strings.requestTitle}
           requestDescription={strings.requestDescription}
           numberLabel={strings.numberLabel}
@@ -330,10 +500,23 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           imageUrlHint={strings.imageUrlHint}
           imageUrl={imageUrl}
           onImageUrlChange={setImageUrl}
+          showDocumentField={isDocumentEndpoint}
+          documentUrlLabel={strings.documentUrlLabel}
+          documentUrlPlaceholder={strings.documentUrlPlaceholder}
+          documentUrlHint={strings.documentUrlHint}
+          documentUrl={documentUrl}
+          onDocumentUrlChange={setDocumentUrl}
+          fileNameLabel={strings.fileNameLabel}
+          fileNamePlaceholder={strings.fileNamePlaceholder}
+          fileNameHint={strings.fileNameHint}
+          fileName={fileName}
+          onFileNameChange={setFileName}
           textLabel={strings.textLabel}
           textPlaceholder={strings.textPlaceholder}
           textHint={strings.textHint}
           sendLabel={strings.sendLabel}
+          sendingLabel={strings.sendingLabel}
+          isSending={requestSending}
           fieldSummary={fieldSummary}
           responseTitle={strings.responseTitle}
           responseDescription={strings.responseDescription}
@@ -345,6 +528,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           copiedLabel={strings.copiedLabel}
           authInstanceId={instanceId}
           authToken={token}
+          onAuthInstanceIdChange={setInstanceId}
           responseBodyJson={responseBodyJson}
           remoteJid={remoteJid}
           messageText={messageText}

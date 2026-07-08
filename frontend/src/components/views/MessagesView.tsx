@@ -208,6 +208,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   const handleSubmitCompose = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (sending) return;
     if (!compose.instanceId || !compose.remoteJid.trim() || !compose.messageText.trim()) return;
     if (compose.type === 'file' && !compose.attachmentData) return;
 
@@ -651,8 +652,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setComposeOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+                onClick={() => {
+                  if (!sending) setComposeOpen(false);
+                }}
+                disabled={sending}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:hover:bg-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -665,8 +669,9 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   <input
                     value={compose.remoteJid}
                     onChange={e => setCompose(prev => ({ ...prev, remoteJid: e.target.value }))}
+                    disabled={sending}
                     placeholder="+992..."
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
 
@@ -675,7 +680,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   <select
                     value={compose.instanceId}
                     onChange={e => setCompose(prev => ({ ...prev, instanceId: e.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                    disabled={sending}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                   >
                     {instanceOptions.length === 0 ? (
                       <option value="">{isRu ? 'Нет инстансов' : 'No instances'}</option>
@@ -696,9 +702,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   <textarea
                     value={compose.messageText}
                     onChange={e => setCompose(prev => ({ ...prev, messageText: e.target.value }))}
+                    disabled={sending}
                     placeholder={isRu ? 'Введите сообщение...' : 'Type a message...'}
                     rows={6}
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
 
@@ -707,7 +714,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   <select
                     value={compose.type}
                     onChange={e => setCompose(prev => ({ ...prev, type: e.target.value as ComposeType }))}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                    disabled={sending}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                   >
                     <option value="text">{isRu ? 'Текст' : 'Text'}</option>
                     <option value="file">{isRu ? 'Файл' : 'File'}</option>
@@ -718,12 +726,14 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       ref={fileInputRef}
                       type="file"
                       className="hidden"
+                      disabled={sending}
                       onChange={e => handleFilePick(e.target.files?.[0] || null)}
                     />
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                      disabled={sending}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                     >
                       <Upload className="h-4 w-4" />
                       {isRu ? 'Добавить файл' : 'Add file'}
@@ -740,7 +750,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setComposeOpen(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                  disabled={sending}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
                 >
                   {isRu ? 'Отмена' : 'Cancel'}
                 </button>

@@ -19,9 +19,15 @@ type QrWaiter = {
   timer: NodeJS.Timeout;
 };
 
+type ConnectionWaiter = {
+  resolve: (connected: boolean) => void;
+  timer: NodeJS.Timeout;
+};
+
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
   private readonly qrWaiters = new Map<string, QrWaiter[]>();
+  private readonly connectionWaiters = new Map<string, ConnectionWaiter[]>();
   private readonly repository = new InstanceRepository();
 
   async connect(instance: InstanceView) {
@@ -105,6 +111,7 @@ export class BaileysManager {
         await this.repository.createLog(instance.id, 'info', 'WhatsApp session connected');
         managed.qrCode = null;
         managed.status = 'CONNECTED';
+        this.resolveConnectionWaiters(instance.id, true);
         emitToUser(instance.userId, 'instance:status', {
           instanceId: instance.id,
           status: 'CONNECTED'
@@ -121,6 +128,7 @@ export class BaileysManager {
         const nextStatus = managed.qrCode ? 'WAITING_QR' : 'DISCONNECTED';
 
         this.instances.delete(instance.id);
+        this.resolveConnectionWaiters(instance.id, false);
         if (!shouldReconnect) {
           this.resolveQrWaiters(instance.id, null);
         }
@@ -168,6 +176,12 @@ export class BaileysManager {
     managed.socket.end(undefined);
     this.instances.delete(instanceId);
     this.resolveQrWaiters(instanceId, null);
+    this.resolveConnectionWaiters(instanceId, false);
+  }
+
+  async remove(instanceId: string) {
+    await this.disconnect(instanceId);
+    await rm(this.getAuthPath(instanceId), { recursive: true, force: true });
   }
 
   isRunning(instanceId: string) {
@@ -194,6 +208,27 @@ export class BaileysManager {
 
     const jid = this.normalizeRemoteJid(remoteJid);
     return managed.socket.sendMessage(jid, payload);
+  }
+
+  async waitForConnected(instanceId: string, timeoutMs = 30000) {
+    if (this.getRuntimeStatus(instanceId) === 'CONNECTED') {
+      return true;
+    }
+
+    return new Promise<boolean>(resolve => {
+      const timer = setTimeout(() => {
+        const waiters = this.connectionWaiters.get(instanceId) ?? [];
+        this.connectionWaiters.set(
+          instanceId,
+          waiters.filter(waiter => waiter.resolve !== resolve)
+        );
+        resolve(this.getRuntimeStatus(instanceId) === 'CONNECTED');
+      }, timeoutMs);
+
+      const waiters = this.connectionWaiters.get(instanceId) ?? [];
+      waiters.push({ resolve, timer });
+      this.connectionWaiters.set(instanceId, waiters);
+    });
   }
 
   async waitForQr(instanceId: string, timeoutMs = 60000) {
@@ -228,9 +263,19 @@ export class BaileysManager {
     }
   }
 
+  private resolveConnectionWaiters(instanceId: string, connected: boolean) {
+    const waiters = this.connectionWaiters.get(instanceId) ?? [];
+    this.connectionWaiters.delete(instanceId);
+
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(connected);
+    }
+  }
+
   async restoreActiveSessions() {
     const instances = await prisma.instance.findMany({
-      where: { session: { isNot: null } },
+      where: { deletedAt: null, session: { isNot: null } },
       include: { session: true, settings: true }
     });
 

@@ -5,6 +5,7 @@ import type {
   CreateInstanceInput,
   UpdateInstanceStatusInput,
   UpdateInstanceInput,
+  UpdateInstanceSettingsInput,
   UpdatePhoneNumberInput
 } from './instance.types';
 
@@ -77,6 +78,11 @@ export class InstanceService {
     return this.repository.updatePhoneNumber(instanceId, input.phoneNumber);
   }
 
+  async updateSettings(userId: string, instanceId: string, input: UpdateInstanceSettingsInput) {
+    await this.getById(userId, instanceId);
+    return this.repository.updateSettings(instanceId, input);
+  }
+
   async updateStatus(userId: string, instanceId: string, input: UpdateInstanceStatusInput) {
     await this.getById(userId, instanceId);
     if (input.status === 'CONNECTED') {
@@ -110,6 +116,13 @@ export class InstanceService {
     return this.repository.updateStatus(instanceId, 'DISCONNECTED');
   }
 
+  async delete(userId: string, instanceId: string) {
+    await this.getById(userId, instanceId);
+    await baileysManager.remove(instanceId);
+    await this.repository.deleteSession(instanceId);
+    await this.repository.softDelete(instanceId);
+  }
+
   async getQr(userId: string, instanceId: string) {
     const instance = await this.getById(userId, instanceId);
     if (instance.status !== 'CONNECTED') {
@@ -117,8 +130,9 @@ export class InstanceService {
         await baileysManager.disconnect(instanceId);
       }
 
+      await this.repository.deleteSession(instanceId);
       await this.repository.updateStatus(instanceId, 'CONNECTING', null);
-      await baileysManager.connect(instance);
+      await baileysManager.connect({ ...instance, session: null });
       await baileysManager.waitForQr(instanceId, 60000);
     }
     const updated = await this.repository.findByIdAndUser(instanceId, userId);
