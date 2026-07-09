@@ -6,6 +6,7 @@ import type { InstanceStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../database';
 import { InstanceRepository } from '../../instances/instance.repository';
 import type { InstanceView } from '../../instances/instance.types';
+import { webhookDispatcher } from '../../webhooks/webhook.dispatcher';
 import { emitToInstance, emitToUser } from '../../socket/socket-manager';
 
 type ManagedInstance = {
@@ -24,13 +25,17 @@ type ConnectionWaiter = {
   timer: NodeJS.Timeout;
 };
 
+type ConnectOptions = {
+  resetAuth?: boolean;
+};
+
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
   private readonly qrWaiters = new Map<string, QrWaiter[]>();
   private readonly connectionWaiters = new Map<string, ConnectionWaiter[]>();
   private readonly repository = new InstanceRepository();
 
-  async connect(instance: InstanceView) {
+  async connect(instance: InstanceView, options: ConnectOptions = {}) {
     if (this.instances.has(instance.id)) {
       return this.instances.get(instance.id)!;
     }
@@ -44,7 +49,8 @@ export class BaileysManager {
     } = await import('@whiskeysockets/baileys');
 
     const authPath = this.getAuthPath(instance.id);
-    if (!instance.session) {
+    const shouldResetAuth = options.resetAuth ?? !instance.session;
+    if (shouldResetAuth) {
       await rm(authPath, { recursive: true, force: true });
     }
     await mkdir(authPath, { recursive: true });
@@ -74,6 +80,30 @@ export class BaileysManager {
     socket.ev.on('creds.update', async () => {
       await saveCreds();
       await this.repository.upsertSession(instance.id, state.creds as unknown as Prisma.InputJsonValue);
+    });
+
+    socket.ev.on('messages.upsert', (upsert: any) => {
+      void this.handleMessagesUpsert(instance, upsert).catch(async error => {
+        await this.repository.createLog(instance.id, 'error', 'Failed to handle incoming WhatsApp message', {
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
+    });
+
+    socket.ev.on('messages.update', (updates: any) => {
+      void this.handleMessagesUpdate(instance, updates).catch(async error => {
+        await this.repository.createLog(instance.id, 'error', 'Failed to handle WhatsApp message update', {
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
+    });
+
+    socket.ev.on('message-receipt.update', (updates: any) => {
+      void this.handleMessagesUpdate(instance, updates).catch(async error => {
+        await this.repository.createLog(instance.id, 'error', 'Failed to handle WhatsApp receipt update', {
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
     });
 
     socket.ev.on('connection.update', async update => {
@@ -159,7 +189,7 @@ export class BaileysManager {
         });
 
         if (shouldReconnect) {
-          void this.connect(instance);
+          void this.connect(instance, { resetAuth: false });
         }
       }
     });
@@ -284,8 +314,215 @@ export class BaileysManager {
     }
   }
 
+  private async handleMessagesUpsert(instance: InstanceView, upsert: any) {
+    const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
+    if (!messages.length) return;
+
+    for (const rawMessage of messages) {
+      if (rawMessage?.key?.fromMe) {
+        continue;
+      }
+
+      const remoteJid = String(rawMessage?.key?.remoteJid || '').trim();
+      const messageId = rawMessage?.key?.id ? String(rawMessage.key.id) : null;
+      const sentAt = this.normalizeTimestamp(rawMessage?.messageTimestamp);
+      const payload = this.buildIncomingMessagePayload(rawMessage);
+
+      if (instance.settings?.storeIncomingMessages) {
+        const existing = await prisma.message.findFirst({
+          where: {
+            instanceId: instance.id,
+            messageId,
+            direction: 'inbound'
+          }
+        });
+
+        if (!existing) {
+          await prisma.message.create({
+            data: {
+              instanceId: instance.id,
+              direction: 'inbound',
+              remoteJid,
+              messageId,
+              payload,
+              status: 'received',
+              sentAt
+            }
+          });
+        }
+      }
+
+      await webhookDispatcher.dispatchMessageReceived({
+        instanceId: instance.id,
+        settings: instance.settings,
+        messageId,
+        remoteJid,
+        sentAt,
+        payload
+      });
+
+      if ((payload as { hasMedia?: boolean }).hasMedia) {
+        await webhookDispatcher.dispatchMediaDownload({
+          instanceId: instance.id,
+          settings: instance.settings,
+          messageId,
+          remoteJid,
+          sentAt,
+          payload
+        });
+      }
+    }
+  }
+
+  private async handleMessagesUpdate(instance: InstanceView, updates: any) {
+    const items = Array.isArray(updates) ? updates : [];
+    if (!items.length) return;
+
+    for (const update of items) {
+      const key = update?.key ?? {};
+      const messageId = key?.id ? String(key.id) : null;
+      const remoteJid = key?.remoteJid ? String(key.remoteJid) : '';
+      const sentAt = this.normalizeTimestamp(update?.messageTimestamp ?? update?.timestamp);
+
+      if (update?.reaction || update?.message?.reactionMessage) {
+        const reaction = update?.reaction?.text
+          ?? update?.message?.reactionMessage?.text
+          ?? update?.message?.reactionMessage?.emoji
+          ?? null;
+
+        await webhookDispatcher.dispatchMessageReaction({
+          instanceId: instance.id,
+          settings: instance.settings,
+          messageId,
+          remoteJid,
+          reaction,
+          sentAt,
+          payload: this.buildReactionPayload(update)
+        });
+      }
+
+      if (typeof update?.status !== 'undefined' || typeof update?.ack !== 'undefined' || typeof update?.receipt !== 'undefined') {
+        const ack = update?.ack ?? update?.status ?? update?.receipt?.type ?? update?.receipt?.status ?? null;
+
+        if (messageId) {
+          await prisma.message.updateMany({
+            where: {
+              instanceId: instance.id,
+              messageId,
+              direction: 'outbound'
+            },
+            data: {
+              status: ack === null ? undefined : String(ack)
+            }
+          });
+        }
+
+        await webhookDispatcher.dispatchMessageAck({
+          instanceId: instance.id,
+          settings: instance.settings,
+          messageId,
+          remoteJid,
+          ack: ack === null ? null : String(ack),
+          sentAt,
+          payload: this.buildAckPayload(update)
+        });
+      }
+    }
+  }
+
   private getAuthPath(instanceId: string) {
     return path.join(process.cwd(), 'storage', 'wa', instanceId);
+  }
+
+  private normalizeTimestamp(value: unknown) {
+    if (!value) return new Date();
+
+    const raw = typeof value === 'object' && value !== null && 'low' in value
+      ? Number((value as { low?: number }).low)
+      : Number(value);
+
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return new Date();
+    }
+
+    return new Date(raw > 1_000_000_000_000 ? raw : raw * 1000);
+  }
+
+  private buildIncomingMessagePayload(message: any): Prisma.InputJsonValue {
+    const messageContent = message?.message || {};
+    const text =
+      messageContent?.conversation ||
+      messageContent?.extendedTextMessage?.text ||
+      messageContent?.imageMessage?.caption ||
+      messageContent?.videoMessage?.caption ||
+      messageContent?.documentMessage?.caption ||
+      messageContent?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      messageContent?.buttonsResponseMessage?.selectedDisplayText ||
+      null;
+
+    return {
+      messageType: this.detectIncomingMessageType(messageContent),
+      text,
+      fromMe: Boolean(message?.key?.fromMe),
+      hasMedia: this.hasMediaMessage(messageContent),
+      raw: {
+        key: {
+          id: message?.key?.id ?? null,
+          remoteJid: message?.key?.remoteJid ?? null,
+          fromMe: Boolean(message?.key?.fromMe)
+        }
+      }
+    } as Prisma.InputJsonValue;
+  }
+
+  private buildAckPayload(update: any): Prisma.InputJsonValue {
+    return {
+      key: update?.key
+        ? {
+            id: update.key.id ?? null,
+            remoteJid: update.key.remoteJid ?? null,
+            fromMe: Boolean(update.key.fromMe)
+          }
+        : null,
+      ack: update?.ack ?? null,
+      status: update?.status ?? null,
+      receipt: update?.receipt ?? null
+    } as Prisma.InputJsonValue;
+  }
+
+  private buildReactionPayload(update: any): Prisma.InputJsonValue {
+    return {
+      key: update?.key
+        ? {
+            id: update.key.id ?? null,
+            remoteJid: update.key.remoteJid ?? null,
+            fromMe: Boolean(update.key.fromMe)
+          }
+        : null,
+      reaction: update?.reaction ?? update?.message?.reactionMessage ?? null
+    } as Prisma.InputJsonValue;
+  }
+
+  private detectIncomingMessageType(messageContent: Record<string, any>) {
+    if (messageContent?.conversation || messageContent?.extendedTextMessage) return 'text';
+    if (messageContent?.imageMessage) return 'image';
+    if (messageContent?.documentMessage) return 'document';
+    if (messageContent?.videoMessage) return 'video';
+    if (messageContent?.audioMessage) return 'audio';
+    if (messageContent?.stickerMessage) return 'sticker';
+    if (messageContent?.contactMessage) return 'contact';
+    if (messageContent?.locationMessage) return 'location';
+    return 'unknown';
+  }
+
+  private hasMediaMessage(messageContent: Record<string, any>) {
+    return Boolean(
+      messageContent?.imageMessage ||
+      messageContent?.documentMessage ||
+      messageContent?.videoMessage ||
+      messageContent?.audioMessage ||
+      messageContent?.stickerMessage
+    );
   }
 
   private normalizePhoneNumber(value: string | null) {

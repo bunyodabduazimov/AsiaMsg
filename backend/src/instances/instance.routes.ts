@@ -8,6 +8,7 @@ import {
   getInstance,
   getInstanceQr,
   listInstances,
+  sendInstanceWebhookTest,
   updateInstance,
   updateInstanceSettings,
   updateInstanceStatus,
@@ -26,5 +27,6 @@ instanceRouter.patch('/:instanceId/settings', updateInstanceSettings);
 instanceRouter.patch('/:instanceId/status', updateInstanceStatus);
 instanceRouter.post('/:instanceId/connect', connectInstance);
 instanceRouter.post('/:instanceId/disconnect', disconnectInstance);
+instanceRouter.post('/:instanceId/webhook-test', sendInstanceWebhookTest);
 instanceRouter.get('/:instanceId/qr', getInstanceQr);
 instanceRouter.delete('/:instanceId', deleteInstance);

@@ -165,6 +165,15 @@ export interface BackendInstanceSettingsInput {
   webhookOnReaction?: boolean;
 }
 
+export interface BackendWebhookTestResult {
+  instanceId: string;
+  instanceName: string;
+  webhookUrl: string | null;
+  statusCode: number | null;
+  responseBody: unknown;
+  errorMessage: string | null;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -315,6 +324,17 @@ export const updateBackendInstanceSettings = (
     method: 'PATCH',
     body: JSON.stringify(input)
   }, accessToken).then(mapBackendInstanceToUi);
+
+export const sendBackendInstanceWebhookTest = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string,
+  input: BackendInstanceSettingsInput
+) =>
+  fetchJson<BackendWebhookTestResult>(apiBaseUrl, `/api/instances/${instanceId}/webhook-test`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, accessToken);
 
 export const updateBackendInstanceStatus = (
   apiBaseUrl: string,
@@ -540,12 +560,20 @@ export const buildWebhookItems = (instances: BackendInstance[], items: BackendWe
     const instanceName = instance?.name || latest?.instance?.name || instanceId;
     const endpoint = instance?.settings?.webhookUrl || latest?.targetUrl || '';
     const signatureKey = undefined;
+    const configuredEventsFromSettings = [
+      instance?.settings?.webhookOnReceived ? 'message.received' : null,
+      instance?.settings?.webhookOnCreate ? 'message.created' : null,
+      instance?.settings?.webhookOnAck ? 'message.ack' : null,
+      instance?.settings?.webhookDownloadMedia ? 'media.download' : null,
+      instance?.settings?.webhookOnReaction ? 'message.reaction' : null
+    ].filter(Boolean) as string[];
 
     return {
       id: `wh-${instanceId}`,
+      instanceId,
       endpoint,
       endpointUrl: endpoint,
-      event: latest?.eventType || 'message.received',
+      event: latest?.eventType || configuredEventsFromSettings[0] || 'message.created',
       method: 'POST',
       status: webhookStatusFromDb(latest?.statusCode ?? null, Boolean(endpoint)),
       code: latest?.statusCode ?? 0,
@@ -554,7 +582,9 @@ export const buildWebhookItems = (instances: BackendInstance[], items: BackendWe
       secret: signatureKey,
       payload: latest?.requestBody ? JSON.stringify(latest.requestBody, null, 2) : undefined,
       active: Boolean(endpoint),
-      configuredEvents: Array.from(new Set(logs.map(item => item.eventType))),
+      configuredEvents: configuredEventsFromSettings.length
+        ? configuredEventsFromSettings
+        : Array.from(new Set(logs.map(item => item.eventType))),
       responseSpeed: latest?.statusCode ? `${Math.max(25, latest.statusCode)} ms` : undefined,
       signatureKey,
       instance: instanceName,

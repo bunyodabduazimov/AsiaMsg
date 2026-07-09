@@ -134,7 +134,6 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
   const isRu = state.language === 'RU';
   const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
   const [selectedId, setSelectedId] = useState(authDocsEndpoints[0]?.id ?? apiDocsEndpoints[0]?.id ?? '');
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ auth: true, messages: true });
   const [authOpen, setAuthOpen] = useState(false);
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
@@ -481,8 +480,6 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           endpointsByGroup={endpointsByGroup}
           selectedEndpointId={selectedEndpoint.id}
           onSelectEndpoint={setSelectedId}
-          openGroups={openGroups}
-          onToggleGroup={groupId => setOpenGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))}
         />
 
         <ApiEndpointDetails

@@ -54,6 +54,7 @@ import {
   mapBackendTokenToUi,
   mapBackendLogToUi,
   sendBackendMessage,
+  sendBackendInstanceWebhookTest,
   updateBackendInstance,
   updateBackendInstanceSettings,
   updateBackendInstanceStatus,
@@ -681,7 +682,28 @@ export default function App() {
       const updated = await updateBackendInstanceSettings(apiBaseUrl, accessToken, id, input);
       setState(prev => ({
         ...prev,
-        instances: prev.instances.map(item => (item.id === id ? { ...item, ...updated } : item))
+        instances: prev.instances.map(item => (item.id === id ? { ...item, ...updated } : item)),
+        webhooks: prev.webhooks.map(item => {
+          if (item.instanceId !== id) return item;
+
+          const configuredEvents = [
+            updated.webhookOnReceived ? 'message.received' : null,
+            updated.webhookOnCreate ? 'message.created' : null,
+            updated.webhookOnAck ? 'message.ack' : null,
+            updated.webhookDownloadMedia ? 'media.download' : null,
+            updated.webhookOnReaction ? 'message.reaction' : null
+          ].filter(Boolean) as string[];
+
+          return {
+            ...item,
+            endpoint: updated.webhookUrl || '',
+            endpointUrl: updated.webhookUrl || '',
+            active: Boolean(updated.webhookUrl),
+            configuredEvents,
+            event: configuredEvents[0] || item.event,
+            instance: updated.name
+          };
+        })
       }));
       triggerToast(state.language === 'RU' ? 'Webhook настройки сохранены' : 'Webhook settings saved');
     } catch (error) {
@@ -691,6 +713,35 @@ export default function App() {
       }
       const message = error instanceof Error ? error.message : 'Failed to update webhook settings';
       triggerToast(message);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleSendWebhookTest = async (id: string, input: BackendInstanceSettingsInput) => {
+    if (pendingAction) return null;
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+      return null;
+    }
+
+    try {
+      setPendingAction(`instance:webhook-test:${id}`);
+      const result = await sendBackendInstanceWebhookTest(apiBaseUrl, accessToken, id, input);
+      triggerToast(
+        result.statusCode && result.statusCode >= 200 && result.statusCode < 300
+          ? (state.language === 'RU' ? 'Тест вебхука отправлен' : 'Webhook test sent')
+          : (state.language === 'RU' ? 'Тест вебхука завершился с ошибкой' : 'Webhook test failed')
+      );
+      return result;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        return null;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to send webhook test';
+      triggerToast(message);
+      return null;
     } finally {
       setPendingAction(null);
     }
@@ -753,6 +804,7 @@ export default function App() {
     }
 
     setState(prev => ({ ...prev, selectedInstanceId: id }));
+    scrollWorkspaceToTop();
 
     if (!id || !accessToken) return;
 
@@ -900,8 +952,10 @@ export default function App() {
           <WebhooksView
             state={state}
             onSelectWebhook={handleSelectWebhook}
-            onAddWebhook={handleAddWebhook}
-            onToggleWebhookActive={handleToggleWebhookActive}
+            onUpdateInstanceSettings={handleUpdateInstanceSettings}
+            onSendWebhookTest={handleSendWebhookTest}
+            actionLoading={pendingAction?.startsWith('instance:settings:') ?? false}
+            testLoading={pendingAction?.startsWith('instance:webhook-test:') ?? false}
           />
         );
       case 'logs':

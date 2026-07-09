@@ -55,6 +55,7 @@ export interface ApiToken {
 
 export interface Webhook {
   id: string;
+  instanceId?: string;
   endpoint: string;
   endpointUrl?: string;
   event: string;

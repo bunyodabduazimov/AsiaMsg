@@ -122,6 +122,18 @@ export const deleteInstance = asyncHandler(async (req: Request, res: Response) =
   res.status(204).send();
 });
 
+export const sendInstanceWebhookTest = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const payload = updateInstanceSettingsSchema.partial().parse(req.body ?? {});
+  const instanceId = String(req.params.instanceId);
+  const result = await instanceService.sendWebhookTest(req.authUser.id, instanceId, payload);
+  res.json(result);
+});
+
 export const getInstanceQr = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) {
     res.status(401).json({ message: 'Unauthorized' });

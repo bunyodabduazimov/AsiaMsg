@@ -1,5 +1,6 @@
 import { AppError } from '../middleware/error-handler';
 import { baileysManager } from '../providers/whatsapp/baileys.manager';
+import { webhookDispatcher } from '../webhooks/webhook.dispatcher';
 import { InstanceRepository } from './instance.repository';
 import type {
   CreateInstanceInput,
@@ -121,6 +122,44 @@ export class InstanceService {
     await baileysManager.remove(instanceId);
     await this.repository.deleteSession(instanceId);
     await this.repository.softDelete(instanceId);
+  }
+
+  async sendWebhookTest(userId: string, instanceId: string, input?: UpdateInstanceSettingsInput) {
+    const instance = await this.getById(userId, instanceId);
+    const settings = instance.settings
+      ? {
+          webhookUrl: input?.webhookUrl !== undefined ? input.webhookUrl : instance.settings.webhookUrl,
+          webhookSecret: input?.webhookSecret !== undefined ? input.webhookSecret : instance.settings.webhookSecret,
+          webhookRetryCount:
+            input?.webhookRetryCount !== undefined ? input.webhookRetryCount : instance.settings.webhookRetryCount,
+          webhookOnReceived:
+            input?.webhookOnReceived !== undefined ? input.webhookOnReceived : instance.settings.webhookOnReceived,
+          webhookOnCreate:
+            input?.webhookOnCreate !== undefined ? input.webhookOnCreate : instance.settings.webhookOnCreate,
+          webhookOnAck: input?.webhookOnAck !== undefined ? input.webhookOnAck : instance.settings.webhookOnAck,
+          webhookDownloadMedia:
+            input?.webhookDownloadMedia !== undefined ? input.webhookDownloadMedia : instance.settings.webhookDownloadMedia,
+          webhookOnReaction:
+            input?.webhookOnReaction !== undefined ? input.webhookOnReaction : instance.settings.webhookOnReaction
+        }
+      : null;
+
+    const result = await webhookDispatcher.dispatchTestWebhook({
+      instanceId: instance.id,
+      settings,
+      payload: {
+        message: 'AsiaMsg webhook test',
+        instanceId: instance.id,
+        instanceName: instance.name
+      }
+    });
+
+    return {
+      instanceId: instance.id,
+      instanceName: instance.name,
+      webhookUrl: instance.settings?.webhookUrl ?? null,
+      ...result
+    };
   }
 
   async getQr(userId: string, instanceId: string) {

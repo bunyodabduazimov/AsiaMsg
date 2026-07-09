@@ -2,6 +2,7 @@ import { prisma } from '../database';
 import { AppError } from '../middleware/error-handler';
 import { instanceService } from '../instances/instance.service';
 import { baileysManager } from '../providers/whatsapp/baileys.manager';
+import { webhookDispatcher } from '../webhooks/webhook.dispatcher';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { createMessageSchema } from './message.schemas';
@@ -16,18 +17,7 @@ export class MessageService {
       throw new AppError('Instance not found', 404);
     }
 
-    if (!baileysManager.isRunning(instance.id) && instance.session) {
-      await baileysManager.connect(instance);
-      await baileysManager.waitForConnected(instance.id, 30000);
-    }
-
-    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
-      await baileysManager.waitForConnected(instance.id, 30000);
-    }
-
-    if (!baileysManager.isRunning(instance.id) || baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
-      throw new AppError('WhatsApp instance is not connected', 409);
-    }
+    await this.ensureWhatsAppConnected(instance);
 
     const attachment = input.attachment ?? null;
     let sentMessage: any;
@@ -97,7 +87,7 @@ export class MessageService {
       whatsappResponse: this.serializeWhatsAppResponse(sentMessage)
     };
 
-    return prisma.message.create({
+    const createdMessage = await prisma.message.create({
       data: {
         instanceId: instance.id,
         direction: 'outbound',
@@ -116,6 +106,36 @@ export class MessageService {
         }
       }
     });
+
+    await webhookDispatcher.dispatchMessageCreate({
+      message: createdMessage,
+      settings: instance.settings
+    });
+
+    return createdMessage;
+  }
+
+  private async ensureWhatsAppConnected(instance: NonNullable<Awaited<ReturnType<typeof instanceService.getById>>>) {
+    const canRestoreSession = Boolean(instance.session) || ['CONNECTED', 'RECONNECTING'].includes(instance.status);
+
+    if (!baileysManager.isRunning(instance.id) && canRestoreSession) {
+      await baileysManager.connect(instance, { resetAuth: false });
+      await baileysManager.waitForConnected(instance.id, 60000);
+    }
+
+    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
+      await baileysManager.waitForConnected(instance.id, 60000);
+    }
+
+    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED' && canRestoreSession) {
+      await baileysManager.disconnect(instance.id);
+      await baileysManager.connect(instance, { resetAuth: false });
+      await baileysManager.waitForConnected(instance.id, 60000);
+    }
+
+    if (!baileysManager.isRunning(instance.id) || baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
+      throw new AppError('WhatsApp instance is not connected', 409);
+    }
   }
 
   private async downloadRemoteFile(url: string) {

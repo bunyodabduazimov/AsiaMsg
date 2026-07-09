@@ -54,8 +54,8 @@ type DocGroup = {
 };
 
 const groups: DocGroup[] = [
-  { id: 'messages', title: 'Messages', icon: <MessageSquare className="h-4 w-4" />, defaultOpen: true },
-  { id: 'instance', title: 'Instance', icon: <Smartphone className="h-4 w-4" />, defaultOpen: true },
+  { id: 'messages', title: 'Messages', icon: <MessageSquare className="h-4 w-4" />, defaultOpen: false },
+  { id: 'instance', title: 'Instance', icon: <Smartphone className="h-4 w-4" />, defaultOpen: false },
   { id: 'chats', title: 'Chats', icon: <MessageSquare className="h-4 w-4" /> },
   { id: 'contacts', title: 'Contacts', icon: <Folder className="h-4 w-4" /> },
   { id: 'groups', title: 'Groups', icon: <Folder className="h-4 w-4" /> },
@@ -673,7 +673,7 @@ export const TokensView: React.FC<TokensViewProps> = () => {
   const [openGroups, setOpenGroups] = useState<Record<SectionGroupId, boolean>>({
     messages: true,
     instance: true,
-    chats: false,
+    chats: true,
     contacts: false,
     groups: false,
     media: false

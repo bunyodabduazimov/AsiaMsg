@@ -270,16 +270,16 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               <ChevronLeft className="h-4 w-4" />
               {isRu ? 'Назад' : 'Back'}
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{selectedInstance.name}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">{selectedInstance.name} * {selectedInstance.number}</h1>
             <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
               {isRu ? 'Страница деталей инстанса' : 'Instance details page'}
             </p>
           </div>
         </div>
 
-        <div className="grid gap-0 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="border-b border-slate-100 p-6 lg:border-b-0 lg:border-r dark:border-slate-800">
-            <div className="flex items-center justify-between gap-4">
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
                   {isRu ? 'Статус подключения' : 'Connection status'}
@@ -301,14 +301,14 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               </button>
             </div>
 
-            <div className="mt-5 grid gap-5 sm:grid-cols-[auto_1fr] sm:items-center">
-              <div className="flex justify-center">
+            <div className="mt-5 grid gap-5 lg:grid-cols-[260px_1fr] lg:items-center">
+              <div className="flex w-full justify-center">
                 {selectedInstance.qrCode ? (
-                  <div className="flex h-56 w-56 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                  <div className="flex min-h-48 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm sm:h-56 sm:w-56">
                     <img
                       src={selectedInstance.qrCode}
                       alt="WhatsApp QR code"
-                      className="h-44 w-44 object-contain"
+                      className="h-44 w-44 object-contain sm:h-48 sm:w-48"
                     />
                     {selectedInstance.qrExpiresAt ? (
                       <p className="text-[11px] font-semibold text-amber-600">
@@ -323,32 +323,36 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="flex h-56 w-56 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 px-6 text-center text-blue-700">
-                    <QrCode className="h-11 w-11" />
+                  <div className="flex min-h-40 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 px-5 py-6 text-center text-blue-700 sm:h-56 sm:w-56">
+                    <QrCode className="h-14 w-14 sm:h-20 sm:w-20" />
                     <div className="text-sm font-bold leading-5">
                       {isRu ? 'Нажмите подключить, чтобы получить QR' : 'Press connect to get QR'}
+                    </div>
+                    <div className="text-xs font-medium text-blue-500">
+                      {isConnected
+                        ? (isRu ? 'QR не нужен для активной сессии' : 'QR is not needed for an active session')
+                        : (isRu ? 'QR появится после запроса' : 'QR appears after request')}
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
                 <InfoCard
-                  label={isRu ? 'Номер' : 'Number'}
-                  value={selectedInstance.number}
-                  onCopy={() => void copyToClipboard(selectedInstance.number, 'number')}
-                  copied={copiedField === 'number'}
+                  label={isRu ? 'ID инстанса' : 'Instance ID'}
+                  value={selectedInstance.id}
+                  onCopy={() => void copyToClipboard(selectedInstance.id, 'id')}
+                  copied={copiedField === 'id'}
                 />
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <div className="text-xs font-semibold text-slate-400">{isRu ? 'Провайдер' : 'Provider'}</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{selectedInstance.provider}</div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <div className="text-xs font-semibold text-slate-400">Webhook</div>
-                  <div className="mt-1 text-sm font-semibold text-emerald-600">
-                    {selectedInstance.webhookUrl ? selectedInstance.webhookUrl : (isRu ? 'Активен' : 'Active')}
-                  </div>
-                </div>
+                <InfoCard
+                  label="Access Token"
+                  value={accessToken ? `${accessToken}` : (isRu ? 'Сессия не авторизована' : 'Session not authorized')}
+                  onCopy={accessToken ? () => void copyToClipboard(`${accessToken}`, 'access-token') : undefined}
+                  copied={copiedField === 'access-token'}
+                />
+                <InfoCard label={isRu ? 'Создан' : 'Created'} value={selectedInstance.createdDate || '—'} />
+                <InfoCard label={isRu ? 'Последняя активность' : 'Last active'} value={selectedInstance.lastActive} />
+                <InfoCard label={isRu ? 'Сообщений' : 'Messages'} value={String(selectedInstance.messagesToday)} />
               </div>
             </div>
 
@@ -371,6 +375,17 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
                 {isRu ? 'Получить QR' : 'Get QR'}
               </button>
+
+              <button
+                type="button"
+                onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin text-amber-500" /> : <RotateCcw className="h-4 w-4 text-amber-500" />}
+                {isRu ? 'Перезапуск' : 'Reconnect'}
+              </button>
+
               <button
                 type="button"
                 onClick={() => runStatusAction(selectedInstance.id, 'Disconnected')}
@@ -391,7 +406,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             </p>
           </div>
 
-          <div className="bg-slate-50/70 p-6 dark:bg-slate-950/40">
+          <div className="hidden">
             <div className="grid gap-3 sm:grid-cols-2">
               <InfoCard
                 label={isRu ? 'ID инстанса' : 'Instance ID'}
@@ -895,10 +910,10 @@ type InfoCardProps = {
 };
 
 const InfoCard: React.FC<InfoCardProps> = ({ label, value, copied, onCopy }) => (
-  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+  <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
     <div className="text-xs font-semibold text-slate-400">{label}</div>
     <div className="mt-1 flex items-center justify-between gap-3">
-      <div className="min-w-0 truncate text-sm font-semibold text-slate-900">{value}</div>
+      <div className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-900">{value}</div>
       {onCopy && (
         <button
           type="button"
