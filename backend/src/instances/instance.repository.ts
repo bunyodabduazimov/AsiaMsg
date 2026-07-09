@@ -24,6 +24,21 @@ export class InstanceRepository {
     });
   }
 
+  findByIdAndApiKeyHash(instanceId: string, apiKeyHash: string) {
+    return prisma.instance.findFirst({
+      where: { id: instanceId, apiKeyHash: apiKeyHash, deletedAt: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+  }
+
   create(userId: string, data: { name: string; phoneNumber: string | null }) {
     return prisma.instance.create({
       data: {
@@ -74,6 +89,42 @@ export class InstanceRepository {
         }
       },
       include: { session: true, settings: true }
+    });
+  }
+
+  setApiKey(instanceId: string, apiKeyHash: string, apiKeyPreview: string) {
+    return prisma.instance.update({
+      where: { id: instanceId },
+      data: {
+        apiKeyHash: apiKeyHash,
+        apiKeyPreview: apiKeyPreview,
+        apiKeyCreatedAt: new Date(),
+        apiKeyLastUsedAt: null
+      },
+      include: { session: true, settings: true }
+    });
+  }
+
+  clearApiKey(instanceId: string) {
+    return prisma.instance.update({
+      where: { id: instanceId },
+      data: {
+        apiKeyHash: null,
+        apiKeyPreview: null,
+        apiKeyCreatedAt: null,
+        apiKeyLastUsedAt: null
+      },
+      include: { session: true, settings: true }
+    });
+  }
+
+  touchApiKeyLastUsed(instanceId: string) {
+    return prisma.instance.update({
+      where: { id: instanceId },
+      data: {
+        apiKeyLastUsedAt: new Date()
+      },
+      select: { id: true }
     });
   }
 

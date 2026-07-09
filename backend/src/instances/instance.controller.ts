@@ -233,3 +233,36 @@ export const clearInstanceData = asyncHandler(async (req: Request, res: Response
   const item = await instanceService.clearInstance(req.authUser.id, instanceId);
   res.json(item);
 });
+
+export const getInstanceApiKeyInfo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.getApiKeyInfo(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const regenerateInstanceApiKey = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.regenerateApiKey(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const revokeInstanceApiKey = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.revokeApiKey(req.authUser.id, instanceId);
+  res.json(item);
+});

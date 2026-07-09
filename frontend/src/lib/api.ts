@@ -144,6 +144,11 @@ export interface BackendRegisterInput extends BackendLoginInput {
   name: string;
 }
 
+export interface BackendGoogleLoginInput {
+  apiBaseUrl: string;
+  idToken: string;
+}
+
 export interface BackendConnectionInfo {
   apiBaseUrl: string;
   accessToken: string | null;
@@ -275,6 +280,14 @@ export const registerToBackend = (input: BackendRegisterInput) =>
     })
   });
 
+export const loginWithGoogleToBackend = (input: BackendGoogleLoginInput) =>
+  fetchJson<AuthSession>(input.apiBaseUrl, '/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({
+      idToken: input.idToken
+    })
+  });
+
 export const fetchCurrentUser = (apiBaseUrl: string, accessToken: string) =>
   fetchJson<BackendUser>(apiBaseUrl, '/api/auth/me', {}, accessToken);
 
@@ -298,10 +311,21 @@ export const createBackendInstance = (
   accessToken: string,
   input: BackendInstanceInput
 ) =>
-  fetchJson<BackendInstance>(apiBaseUrl, '/api/instances', {
+  fetchJson<any>(apiBaseUrl, '/api/instances', {
     method: 'POST',
     body: JSON.stringify(input)
-  }, accessToken).then(mapBackendInstanceToUi);
+  }, accessToken).then(response => {
+    // Response may include apiKey for newly created instance
+    if (response.apiKey) {
+      // Store API key in localStorage for user to see
+      sessionStorage.setItem('createdInstanceApiKey', JSON.stringify({
+        instanceId: response.instance?.id || response.id,
+        apiKey: response.apiKey,
+        apiKeyPreview: response.apiKeyPreview
+      }));
+    }
+    return mapBackendInstanceToUi(response.instance || response);
+  });
 
 export const updateBackendInstance = (
   apiBaseUrl: string,

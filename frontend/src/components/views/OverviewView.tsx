@@ -10,6 +10,7 @@ import {
   Globe,
   Radio
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AppState, ActiveView } from '../../types';
 import { StatCard } from '../StatCard';
 import { StatusBadge } from '../StatusBadge';
@@ -25,7 +26,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onViewChange,
   onAddNumberClick,
 }) => {
-  const isRu = state.language === 'RU';
+  const { t } = useTranslation();
   const isDark = state.theme === 'dark';
 
   // Statistics summaries
@@ -34,6 +35,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const reconnectingCount = state.instances.filter(i => i.status === 'Reconnecting').length;
   const disconnectedCount = state.instances.filter(i => i.status === 'Disconnected').length;
   const totalCount = state.instances.length;
+  const totalMessages = state.messages.length;
+  const sentTodayCount = state.instances.reduce((sum, instance) => sum + instance.messagesToday, 0);
+  const deliveredCount = state.messages.filter(message => message.status === 'Доставлено').length;
+  const errorCount = state.messages.filter(message => message.status === 'Ошибка').length;
+  const formatCount = (value: number) => value.toLocaleString('ru-RU');
+  const getPercent = (value: number) => (totalCount > 0 ? (value / totalCount) * 100 : 0);
 
   return (
     <div className="space-y-6">
@@ -41,10 +48,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-            {isRu ? 'Панель управления' : 'Dashboard'}
+            {t('overview.title')}
           </h1>
           <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-            {isRu ? 'Оперативная сводка и показатели подключений' : 'Live analytics and instance summary'}
+            {t('overview.subtitle')}
           </p>
         </div>
         
@@ -53,45 +60,35 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-all duration-200 shadow-sm shadow-blue-100 dark:shadow-none cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>{isRu ? 'Добавить WhatsApp номер' : 'Add WhatsApp number'}</span>
+          <span>{t('overview.addNumber')}</span>
         </button>
       </div>
 
       {/* 4 Stat Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title={isRu ? "Активные инстансы" : "Active Instances"}
+          title={t('overview.activeInstances')}
           value={`${connectedCount + waitingQrCount}`}
-          trend="14%"
-          trendDirection="up"
-          trendColor="green"
+          subValue={`${totalCount}`}
           icon={<Layers className="w-5 h-5" />}
           iconBg="bg-blue-50 text-blue-600"
         />
         <StatCard
-          title={isRu ? "Отправлено сегодня" : "Sent Today"}
-          value="12 458"
-          trend="18%"
-          trendDirection="up"
-          trendColor="green"
+          title={t('overview.sentToday')}
+          value={formatCount(sentTodayCount)}
+          subValue={formatCount(totalMessages)}
           icon={<Send className="w-5 h-5" />}
           iconBg="bg-emerald-50 text-emerald-600"
         />
         <StatCard
-          title={isRu ? "Доставлено" : "Delivered"}
-          value="11 732"
-          trend="16%"
-          trendDirection="up"
-          trendColor="green"
+          title={t('overview.delivered')}
+          value={formatCount(deliveredCount)}
           icon={<CheckCircle2 className="w-5 h-5" />}
           iconBg="bg-purple-50 text-purple-600"
         />
         <StatCard
-          title={isRu ? "Ошибки" : "Errors"}
-          value="126"
-          trend="8%"
-          trendDirection="up"
-          trendColor="red"
+          title={t('overview.errors')}
+          value={formatCount(errorCount)}
           icon={<AlertTriangle className="w-5 h-5" />}
           iconBg="bg-rose-50 text-rose-600"
         />
@@ -104,15 +101,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-                {isRu ? 'Активность сообщений' : 'Message Activity'}
+                {t('overview.messageActivity')}
               </h3>
               <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                {isRu ? 'Суммарный трафик по всем номерам' : 'Aggregated traffic across all channels'}
+                {t('overview.aggregatedTraffic')}
               </p>
             </div>
             <select className="text-xs bg-gray-50 dark:bg-slate-950 border border-gray-200/80 dark:border-slate-800 rounded-lg px-2.5 py-1.5 font-medium text-gray-600 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-100">
-              <option>{isRu ? 'Последние 7 дней' : 'Last 7 Days'}</option>
-              <option>{isRu ? 'Последние 30 дней' : 'Last 30 Days'}</option>
+              <option>{t('overview.last7Days')}</option>
+              <option>{t('overview.last30Days')}</option>
             </select>
           </div>
 
@@ -172,10 +169,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs lg:col-span-3 flex flex-col justify-between transition-colors duration-200">
           <div>
             <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-              {isRu ? 'Статусы инстансов' : 'Instance Statuses'}
+              {t('overview.instanceStatuses')}
             </h3>
             <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-              {isRu ? 'Текущая пропорция всех подключений' : 'Ratio of active channels'}
+              {t('overview.ratioOfChannels')}
             </p>
           </div>
 
@@ -194,7 +191,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div className="h-2 w-full bg-gray-50 dark:bg-slate-950 rounded-full overflow-hidden">
                 <div 
                   className="bg-emerald-500 h-full rounded-full" 
-                  style={{ width: `${(connectedCount/totalCount)*100}%` }}
+                  style={{ width: `${getPercent(connectedCount)}%` }}
                 />
               </div>
             </div>
@@ -213,7 +210,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div className="h-2 w-full bg-gray-50 dark:bg-slate-950 rounded-full overflow-hidden">
                 <div 
                   className="bg-blue-500 h-full rounded-full" 
-                  style={{ width: `${(waitingQrCount/totalCount)*100}%` }}
+                  style={{ width: `${getPercent(waitingQrCount)}%` }}
                 />
               </div>
             </div>
@@ -232,7 +229,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div className="h-2 w-full bg-gray-50 dark:bg-slate-950 rounded-full overflow-hidden">
                 <div 
                   className="bg-amber-500 h-full rounded-full" 
-                  style={{ width: `${(reconnectingCount/totalCount)*100}%` }}
+                  style={{ width: `${getPercent(reconnectingCount)}%` }}
                 />
               </div>
             </div>
@@ -251,14 +248,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div className="h-2 w-full bg-gray-50 dark:bg-slate-950 rounded-full overflow-hidden">
                 <div 
                   className="bg-rose-500 h-full rounded-full" 
-                  style={{ width: `${(disconnectedCount/totalCount)*100}%` }}
+                  style={{ width: `${getPercent(disconnectedCount)}%` }}
                 />
               </div>
             </div>
           </div>
 
           <div className="text-[10px] text-gray-400 dark:text-slate-500 text-center font-medium bg-gray-50 dark:bg-slate-950 rounded-lg py-1">
-            {isRu ? 'Обновлено 10 сек. назад' : 'Updated 10s ago'}
+            {t('overview.updated')}
           </div>
         </div>
 
@@ -266,10 +263,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs lg:col-span-3 flex flex-col items-center justify-between text-center transition-colors duration-200">
           <div className="w-full">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-200 text-left">
-              {isRu ? 'Подключить новый номер' : 'Connect New Number'}
+              {t('addInstance.title')}
             </h3>
             <p className="text-[11px] text-gray-400 dark:text-slate-500 text-left mt-0.5">
-              {isRu ? 'Отсканируйте QR-код с помощью WhatsApp' : 'Scan the QR code in WhatsApp'}
+              {t('instances.clickToConnect')}
             </p>
           </div>
 
@@ -297,7 +294,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             rel="noopener noreferrer"
             className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 hover:underline flex items-center gap-1 group"
           >
-            <span>{isRu ? 'Инструкция по подключению' : 'Connection Tutorial'}</span>
+            <span>{t('instances.connectionTutorial')}</span>
             <ExternalLink className="w-3 h-3 transition-transform duration-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </a>
         </div>
@@ -310,10 +307,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-                {isRu ? 'Последние сообщения' : 'Latest Messages'}
+                {t('overview.recentMessages')}
               </h3>
               <span className="text-[10px] text-gray-400 dark:text-slate-500 font-semibold uppercase tracking-wider">
-                {isRu ? 'История' : 'History'}
+                {t('messages.status')}
               </span>
             </div>
 
@@ -321,9 +318,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-slate-800 text-gray-400 dark:text-slate-500 font-medium">
-                    <th className="pb-2">{isRu ? 'Номер' : 'Number'}</th>
-                    <th className="pb-2">{isRu ? 'Статус' : 'Status'}</th>
-                    <th className="pb-2 text-right">{isRu ? 'Время' : 'Time'}</th>
+                    <th className="pb-2">{t('instances.phone')}</th>
+                    <th className="pb-2">{t('messages.status')}</th>
+                    <th className="pb-2 text-right">{t('messages.time')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60 text-gray-700 dark:text-slate-300">
@@ -348,7 +345,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             onClick={() => onViewChange('messages')}
             className="w-full border-t border-gray-50 dark:border-slate-800 text-center pt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline transition-colors mt-4 cursor-pointer"
           >
-            {isRu ? 'Смотреть все сообщения →' : 'View all messages →'}
+                        {t('overview.recentMessages')} →
           </button>
         </div>
 
@@ -357,10 +354,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-                {isRu ? 'Последние webhooks' : 'Latest Webhooks'}
+                {t('webhooks.title')}
               </h3>
               <span className="text-[10px] text-gray-400 dark:text-slate-500 font-semibold uppercase tracking-wider">
-                {isRu ? 'Интеграция' : 'Integration'}
+                {t('webhooks.events')}
               </span>
             </div>
 
@@ -369,9 +366,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-slate-800 text-gray-400 dark:text-slate-500 font-medium">
                     <th className="pb-2">Method</th>
-                    <th className="pb-2">{isRu ? 'Эндпоинт / Событие' : 'Endpoint / Event'}</th>
+                    <th className="pb-2">{t('webhooks.events')}</th>
                     <th className="pb-2 text-center">Code</th>
-                    <th className="pb-2 text-right">{isRu ? 'Время' : 'Time'}</th>
+                    <th className="pb-2 text-right">{t('messages.time')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60 text-gray-700 dark:text-slate-300">
@@ -407,7 +404,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             onClick={() => onViewChange('webhooks')}
             className="w-full border-t border-gray-50 dark:border-slate-800 text-center pt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline transition-colors mt-4 cursor-pointer"
           >
-            {isRu ? 'Смотреть все события →' : 'View all events →'}
+                        {t('webhooks.title')} →
           </button>
         </div>
       </div>

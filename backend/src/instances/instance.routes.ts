@@ -8,6 +8,7 @@ import {
   disconnectInstance,
   getInstance,
   getInstanceMe,
+  getInstanceApiKeyInfo,
   getInstanceQr,
   getInstanceQrCode,
   getInstanceSettings,
@@ -17,6 +18,8 @@ import {
   restartInstance,
   saveInstanceSettings,
   sendInstanceWebhookTest,
+  regenerateInstanceApiKey,
+  revokeInstanceApiKey,
   updateInstance,
   updateInstanceSettings,
   updateInstanceStatus,
@@ -47,3 +50,6 @@ instanceRouter.post('/:instanceId/logout', logoutInstance);
 instanceRouter.post('/:instanceId/restart', restartInstance);
 instanceRouter.post('/:instanceId/settings', saveInstanceSettings);
 instanceRouter.post('/:instanceId/clear', clearInstanceData);
+instanceRouter.get('/:instanceId/api-key', getInstanceApiKeyInfo);
+instanceRouter.post('/:instanceId/api-key/regenerate', regenerateInstanceApiKey);
+instanceRouter.delete('/:instanceId/api-key', revokeInstanceApiKey);

@@ -8,12 +8,14 @@ import {
   ShieldCheck,
   MessageSquareCode,
   Menu,
-  Globe,
+  Languages,
   SunMedium,
   MoonStar,
   MonitorCog,
   Check
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { changeLanguage } from '../i18n';
 import { AppState } from '../types';
 
 interface TopbarProps {
@@ -35,14 +37,14 @@ export const Topbar: React.FC<TopbarProps> = ({
   onMenuClick,
   onLogout
 }) => {
+  const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const isRu = state.language === 'RU';
 
   const mockNotifications = [
-    { id: 1, text: isRu ? 'Инстанс "Sales Bot" успешно подключен' : 'Instance "Sales Bot" successfully connected', time: '1 мин. назад' },
-    { id: 2, text: isRu ? 'Достигнуто 25% месячного лимита сообщений' : 'Reached 25% of monthly message limit', time: '15 мин. назад' },
-    { id: 3, text: isRu ? 'Обнаружена ошибка webhook доставки на CRM Sync' : 'Webhook delivery error detected on CRM Sync', time: '1 ч. назад' }
+    { id: 1, text: t('topbar.notif1'), time: '1 мин. назад' },
+    { id: 2, text: t('topbar.notif2'), time: '15 мин. назад' },
+    { id: 3, text: t('topbar.notif3'), time: '1 ч. назад' }
   ];
 
   const closeDropdowns = () => setOpenDropdown(null);
@@ -64,6 +66,15 @@ export const Topbar: React.FC<TopbarProps> = ({
           <Menu className="h-5 w-5" />
         </button>
 
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 md:inline-flex"
+          aria-label="Toggle navigation"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
         <div className="relative hidden min-w-0 flex-1 lg:block lg:max-w-2xl">
           <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400 dark:text-slate-500">
             <Search className="h-4.5 w-4.5" />
@@ -72,7 +83,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             type="text"
             value={state.searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={isRu ? 'Поиск...' : 'Search...'}
+            placeholder={t('topbar.search')}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-14 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-950"
           />
           <div className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center">
@@ -90,7 +101,7 @@ export const Topbar: React.FC<TopbarProps> = ({
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
               aria-label="Language"
             >
-              <Globe className="h-4.5 w-4.5" />
+              <Languages className="h-4.5 w-4.5" />
             </button>
 
             {openDropdown === 'language' && (
@@ -99,6 +110,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 <div className="absolute right-0 z-50 mt-2.5 w-40 rounded-2xl border border-slate-200 bg-white p-1 shadow-xl transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950">
                   <button
                     onClick={() => {
+                      changeLanguage('ru');
                       onLanguageChange('RU');
                       closeDropdowns();
                     }}
@@ -108,11 +120,15 @@ export const Topbar: React.FC<TopbarProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
                     }`}
                   >
-                    <span>Русский</span>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-slate-100 px-1 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">RU</span>
+                      <span>Русский</span>
+                    </span>
                     {state.language === 'RU' && <Check className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={() => {
+                      changeLanguage('en');
                       onLanguageChange('EN');
                       closeDropdowns();
                     }}
@@ -122,7 +138,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
                     }`}
                   >
-                    <span>English</span>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-slate-100 px-1 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">EN</span>
+                      <span>English</span>
+                    </span>
                     {state.language === 'EN' && <Check className="h-4 w-4" />}
                   </button>
                 </div>
@@ -161,7 +180,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
                     }`}
                   >
-                    <span>{isRu ? 'Светлая' : 'Light'}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <SunMedium className="h-4 w-4 text-amber-500" />
+                      <span>{t('topbar.light')}</span>
+                    </span>
                     {state.theme === 'light' && <Check className="h-4 w-4" />}
                   </button>
                   <button
@@ -175,7 +197,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
                     }`}
                   >
-                    <span>{isRu ? 'Тёмная' : 'Dark'}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <MoonStar className="h-4 w-4 text-slate-400 dark:text-slate-200" />
+                      <span>{t('topbar.dark')}</span>
+                    </span>
                     {state.theme === 'dark' && <Check className="h-4 w-4" />}
                   </button>
                   <button
@@ -189,7 +214,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
                     }`}
                   >
-                    <span>{isRu ? 'Системная' : 'System'}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <MonitorCog className="h-4 w-4 text-blue-500" />
+                      <span>{t('topbar.system')}</span>
+                    </span>
                     {state.theme === 'system' && <Check className="h-4 w-4" />}
                   </button>
                 </div>
@@ -218,10 +246,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                 <div className="absolute right-0 z-50 mt-2.5 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center justify-between pb-2.5">
                     <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {isRu ? 'Уведомления' : 'Notifications'}
+                      {t('topbar.notifications')}
                     </span>
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
-                      {state.notificationCount} {isRu ? 'новых' : 'New'}
+                      {state.notificationCount} New
                     </span>
                   </div>
                   <div className="space-y-3 pt-3">
@@ -243,22 +271,22 @@ export const Topbar: React.FC<TopbarProps> = ({
                 setShowProfileMenu(!showProfileMenu);
                 closeDropdowns();
               }}
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 transition-opacity hover:opacity-90 dark:border-slate-800 dark:bg-slate-900"
+              className="group flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5 transition-all hover:bg-white hover:shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-700/80"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-sm font-bold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/15 dark:text-blue-300">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/20 to-sky-500/20 text-xs font-bold text-blue-700 ring-1 ring-blue-100 dark:from-blue-500/25 dark:to-sky-500/25 dark:text-blue-300 dark:ring-blue-500/20">
                 {state.userProfile.name.charAt(0)}
               </div>
 
-              <div className="hidden text-left lg:block">
+              <div className="hidden text-left sm:block">
                 <span className="block text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
                   {state.userProfile.name}
                 </span>
-                <span className="block text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                <span className="hidden text-[10px] font-mono text-slate-400 dark:text-slate-500 xl:block">
                   {state.userProfile.email}
                 </span>
               </div>
 
-              <ChevronDown className="hidden h-4 w-4 text-slate-400 dark:text-slate-500 sm:block" />
+              <ChevronDown className="hidden h-4 w-4 text-slate-400 transition-transform group-hover:translate-y-0.5 dark:text-slate-500 sm:block" />
             </button>
 
             {showProfileMenu && (
@@ -266,24 +294,24 @@ export const Topbar: React.FC<TopbarProps> = ({
                 <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
                 <div className="absolute right-0 z-50 mt-2.5 w-56 rounded-2xl border border-slate-200 bg-white py-2 shadow-xl transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950">
                   <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-                    <span className="block text-xs text-slate-400 dark:text-slate-500">{isRu ? 'Роль' : 'Role'}</span>
+                    <span className="block text-xs text-slate-400 dark:text-slate-500">{t('topbar.profile')}</span>
                     <span className="block text-xs font-semibold text-blue-600 dark:text-blue-300">
-                      {isRu ? 'Администратор' : 'Administrator'}
+                      {t('topbar.admin')}
                     </span>
                   </div>
 
                   <div className="space-y-0.5 p-1">
                     <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
                       <User className="h-4 w-4 text-slate-400" />
-                      {isRu ? 'Мой аккаунт' : 'My Account'}
+                      {t('settings.profile')}
                     </button>
                     <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
                       <ShieldCheck className="h-4 w-4 text-slate-400" />
-                      {isRu ? 'Безопасность' : 'Security'}
+                      {t('settings.security')}
                     </button>
                     <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
                       <MessageSquareCode className="h-4 w-4 text-slate-400" />
-                      {isRu ? 'Документация API' : 'API Reference'}
+                      {t('nav.apiDocs')}
                     </button>
                   </div>
 
@@ -297,7 +325,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                     >
                       <LogOut className="h-4 w-4" />
-                      {isRu ? 'Выйти' : 'Sign Out'}
+                      {t('topbar.logout')}
                     </button>
                   </div>
                 </div>
@@ -307,20 +335,6 @@ export const Topbar: React.FC<TopbarProps> = ({
         </div>
       </div>
 
-      <div className="mt-3 lg:hidden">
-        <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400 dark:text-slate-500">
-            <Search className="w-4.5 h-4.5" />
-          </div>
-          <input
-            type="text"
-            value={state.searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={isRu ? 'Поиск...' : 'Search...'}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-950"
-          />
-        </div>
-      </div>
     </header>
   );
 };

@@ -9,10 +9,28 @@ import type { InstanceView } from '../../instances/instance.types';
 import { webhookDispatcher } from '../../webhooks/webhook.dispatcher';
 import { emitToInstance, emitToUser } from '../../socket/socket-manager';
 
+type ChatEntry = {
+  id: string;
+  name?: string | null;
+  unreadCount?: number;
+  conversationTimestamp?: number | null;
+  [key: string]: unknown;
+};
+
+type ContactEntry = {
+  id: string;
+  name?: string | null;
+  notify?: string | null;
+  [key: string]: unknown;
+};
+
 type ManagedInstance = {
   socket: any;
   qrCode: string | null;
   status: InstanceStatus;
+  chats: Map<string, ChatEntry>;
+  contacts: Map<string, ContactEntry>;
+  messagesByChat: Map<string, any[]>;
 };
 
 type QrWaiter = {
@@ -63,7 +81,7 @@ export class BaileysManager {
       keepAliveIntervalMs: 25000,
       qrTimeout: 60000,
       markOnlineOnConnect: false,
-      syncFullHistory: false,
+      syncFullHistory: true,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: Browsers.ubuntu('AsiaMsg')
@@ -72,7 +90,10 @@ export class BaileysManager {
     const managed: ManagedInstance = {
       socket,
       qrCode: null,
-      status: 'CONNECTING'
+      status: 'CONNECTING',
+      chats: new Map(),
+      contacts: new Map(),
+      messagesByChat: new Map()
     };
 
     this.instances.set(instance.id, managed);
@@ -82,7 +103,80 @@ export class BaileysManager {
       await this.repository.upsertSession(instance.id, state.creds as unknown as Prisma.InputJsonValue);
     });
 
+    socket.ev.on('chats.upsert', (newChats: any[]) => {
+      for (const chat of newChats) {
+        const id = chat?.id ?? chat?.jid;
+        if (id) {
+          managed.chats.set(String(id), chat as ChatEntry);
+        }
+      }
+    });
+
+    socket.ev.on('chats.update', (updates: any[]) => {
+      for (const update of updates) {
+        const id = update?.id ?? update?.jid;
+        if (id) {
+          const key = String(id);
+          const existing = managed.chats.get(key) ?? {} as ChatEntry;
+          managed.chats.set(key, { ...existing, ...update } as ChatEntry);
+        }
+      }
+    });
+
+    socket.ev.on('chats.delete', (deletedIds: string[]) => {
+      for (const id of deletedIds) {
+        managed.chats.delete(id);
+      }
+    });
+
+    socket.ev.on('contacts.upsert', (newContacts: any[]) => {
+      for (const contact of newContacts) {
+        const id = contact?.id ?? contact?.jid;
+        if (id) {
+          managed.contacts.set(String(id), contact as ContactEntry);
+        }
+      }
+    });
+
+    socket.ev.on('contacts.update', (updates: any[]) => {
+      for (const update of updates) {
+        const id = update?.id ?? update?.jid;
+        if (id) {
+          const key = String(id);
+          const existing = managed.contacts.get(key) ?? {} as ContactEntry;
+          managed.contacts.set(key, { ...existing, ...update } as ContactEntry);
+        }
+      }
+    });
+
+    socket.ev.on('messaging-history.set', (history: any) => {
+      const chats = Array.isArray(history?.chats) ? history.chats : [];
+      for (const chat of chats) {
+        const id = chat?.id ?? chat?.jid;
+        if (id) {
+          managed.chats.set(String(id), chat as ChatEntry);
+        }
+      }
+
+      const contacts = Array.isArray(history?.contacts) ? history.contacts : [];
+      for (const contact of contacts) {
+        const id = contact?.id ?? contact?.jid;
+        if (id) {
+          managed.contacts.set(String(id), contact as ContactEntry);
+        }
+      }
+
+      const messages = Array.isArray(history?.messages) ? history.messages : [];
+      for (const message of messages) {
+        this.pushMessageToRuntimeCache(managed, message);
+      }
+    });
+
     socket.ev.on('messages.upsert', (upsert: any) => {
+      const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
+      for (const message of messages) {
+        this.pushMessageToRuntimeCache(managed, message);
+      }
       void this.handleMessagesUpsert(instance, upsert).catch(async error => {
         await this.repository.createLog(instance.id, 'error', 'Failed to handle incoming WhatsApp message', {
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -226,6 +320,21 @@ export class BaileysManager {
     return this.instances.get(instanceId)?.qrCode ?? null;
   }
 
+  getChats(instanceId: string): ChatEntry[] {
+    return Array.from(this.instances.get(instanceId)?.chats.values() ?? []);
+  }
+
+  getContacts(instanceId: string): ContactEntry[] {
+    return Array.from(this.instances.get(instanceId)?.contacts.values() ?? []);
+  }
+
+  getChatMessages(instanceId: string, chatId: string, limit = 50): any[] {
+    const normalizedChatId = String(chatId).trim();
+    const items = this.instances.get(instanceId)?.messagesByChat.get(normalizedChatId) ?? [];
+    if (!items.length) return [];
+    return items.slice(-limit).reverse();
+  }
+
   async sendMessage(
     instanceId: string,
     remoteJid: string,
@@ -301,6 +410,26 @@ export class BaileysManager {
       clearTimeout(waiter.timer);
       waiter.resolve(connected);
     }
+  }
+
+  private pushMessageToRuntimeCache(managed: ManagedInstance, message: any) {
+    const chatId = message?.key?.remoteJid ? String(message.key.remoteJid) : null;
+    if (!chatId) {
+      return;
+    }
+
+    if (!managed.chats.has(chatId)) {
+      managed.chats.set(chatId, { id: chatId });
+    }
+
+    const current = managed.messagesByChat.get(chatId) ?? [];
+    current.push(message);
+
+    if (current.length > 500) {
+      current.splice(0, current.length - 500);
+    }
+
+    managed.messagesByChat.set(chatId, current);
   }
 
   async restoreActiveSessions() {

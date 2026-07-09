@@ -53,6 +53,55 @@ export class AuthService {
     return this.issueTokens(user.id);
   }
 
+  async loginWithGoogle(idToken: string): Promise<AuthResponse> {
+    if (!env.GOOGLE_CLIENT_ID) {
+      throw new AppError('Google Sign-In is not configured on server', 500);
+    }
+
+    const tokenInfoResponse = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+    if (!tokenInfoResponse.ok) {
+      throw new AppError('Invalid Google token', 401);
+    }
+
+    const payload = (await tokenInfoResponse.json()) as {
+      aud?: string;
+      email?: string;
+      email_verified?: string;
+      name?: string;
+      exp?: string;
+    };
+
+    if (payload.aud !== env.GOOGLE_CLIENT_ID) {
+      throw new AppError('Google token audience mismatch', 401);
+    }
+
+    if (!payload.exp || Number(payload.exp) * 1000 <= Date.now()) {
+      throw new AppError('Google token expired', 401);
+    }
+
+    const email = payload.email?.trim().toLowerCase();
+    const name = payload.name?.trim();
+    const isEmailVerified = payload.email_verified === 'true';
+
+    if (!email || !isEmailVerified) {
+      throw new AppError('Google account email is not verified', 401);
+    }
+
+    let user = await this.authRepository.findUserByEmail(email);
+    if (!user) {
+      const generatedPasswordHash = await bcrypt.hash(`${email}:${Date.now()}`, 12);
+      user = await this.authRepository.createUser({
+        name: name || 'Google User',
+        email,
+        passwordHash: generatedPasswordHash
+      });
+    }
+
+    return this.issueTokens(user.id);
+  }
+
   async refresh(input: RefreshInput): Promise<AuthResponse> {
     const tokenHash = hashToken(input.refreshToken);
     const storedToken = await this.authRepository.findActiveRefreshTokenByHash(tokenHash);

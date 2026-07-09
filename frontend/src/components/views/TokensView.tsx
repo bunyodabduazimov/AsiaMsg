@@ -600,21 +600,21 @@ const endpoints: DocEndpoint[] = [
 const codeSamples: Record<DocTab, { get: string; post: string }> = {
   curl: {
     get: `curl --location --request GET 'https://api.asiamsg.com/...' \\
---header 'Authorization: Bearer YOUR_TOKEN'`,
+--header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY'`,
     post: `curl --location --request POST 'https://api.asiamsg.com/...' \\
---header 'Authorization: Bearer YOUR_TOKEN' \\
+--header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{ }'`
   },
   js: {
     get: `const response = await fetch('https://api.asiamsg.com/...', {
-  headers: { Authorization: 'Bearer YOUR_TOKEN' }
+  headers: { 'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY' }
 });
 const data = await response.json();`,
     post: `const response = await fetch('https://api.asiamsg.com/...', {
   method: 'POST',
   headers: {
-    Authorization: 'Bearer YOUR_TOKEN',
+    'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({})
@@ -624,13 +624,13 @@ const data = await response.json();`
   php: {
     get: `<?php
 $ch = curl_init('https://api.asiamsg.com/...');
-curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer YOUR_TOKEN']);`,
+curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY']);`,
     post: `<?php
 $ch = curl_init('https://api.asiamsg.com/...');
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
   CURLOPT_HTTPHEADER => [
-    'Authorization: Bearer YOUR_TOKEN',
+    'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
     'Content-Type: application/json'
   ]
 ]);`
@@ -640,13 +640,13 @@ curl_setopt_array($ch, [
 
 response = requests.get(
     'https://api.asiamsg.com/...',
-    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+    headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'}
 )`,
     post: `import requests
 
 response = requests.post(
     'https://api.asiamsg.com/...',
-    headers={'Authorization': 'Bearer YOUR_TOKEN'},
+    headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'},
     json={}
 )`
   }

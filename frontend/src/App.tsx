@@ -1,22 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowRight,
-  Bot,
-  Check,
-  EyeOff,
   KeyRound,
-  Lock,
-  LogIn,
-  Mail,
-  MessageCircle,
-  Phone,
   Plus,
-  ShieldCheck,
-  Smartphone,
-  User,
-  UserPlus
+  Smartphone
 } from 'lucide-react';
 import { Layout } from './components/Layout';
+import { changeLanguage } from './i18n';
 import { OverviewView } from './components/views/OverviewView';
 import { InstancesView } from './components/views/InstancesView';
 import { MessagesView } from './components/views/MessagesView';
@@ -24,6 +13,7 @@ import { ApiDocsPage } from './components/api-docs/ApiDocsPage';
 import { WebhooksView } from './components/views/WebhooksView';
 import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
+import { AuthPage } from './pages/AuthPage';
 import {
   AppState,
   ActiveView,
@@ -45,6 +35,7 @@ import {
   fetchDashboard,
   getDefaultApiBaseUrl,
   loginToBackend,
+  loginWithGoogleToBackend,
   normalizeApiBaseUrl,
   persistConnection,
   readStoredConnection,
@@ -88,6 +79,27 @@ const routeViews: Record<string, ActiveView> = {
   '/settings': 'settings'
 };
 
+const SIDEBAR_STATE_KEY = 'asiamsg.sidebarOpen';
+const LANGUAGE_STATE_KEY = 'asiamsg_lang';
+const THEME_STATE_KEY = 'asiamsg.theme';
+
+const getInitialLanguage = (): 'RU' | 'EN' => {
+  if (typeof window === 'undefined') return 'RU';
+  const storedLanguage = window.localStorage.getItem(LANGUAGE_STATE_KEY);
+  if (storedLanguage === 'ru') return 'RU';
+  if (storedLanguage === 'en') return 'EN';
+  return 'RU';
+};
+
+const getInitialTheme = (): 'light' | 'dark' | 'system' => {
+  if (typeof window === 'undefined') return 'light';
+  const storedTheme = window.localStorage.getItem(THEME_STATE_KEY);
+  if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
+    return storedTheme;
+  }
+  return 'light';
+};
+
 const getViewFromPath = (path: string): ActiveView => {
   if (path === '/instances' || path.startsWith('/instances/')) {
     return 'instances';
@@ -113,8 +125,8 @@ const pushRoute = (path: string) => {
 
 const createEmptyAppState = (): AppState => ({
   activeView: 'overview',
-  language: 'RU',
-  theme: 'light',
+  language: getInitialLanguage(),
+  theme: getInitialTheme(),
   userProfile: {
     name: '',
     email: ''
@@ -132,8 +144,6 @@ const createEmptyAppState = (): AppState => ({
   searchQuery: '',
   notificationCount: 0
 });
-const nowString = () =>
-  new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU');
 
 export default function App() {
   const storedConnection = readStoredConnection();
@@ -144,7 +154,15 @@ export default function App() {
       : 'overview',
     selectedInstanceId: typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null
   }));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+
+    const storedValue = window.localStorage.getItem(SIDEBAR_STATE_KEY);
+    if (storedValue === 'true') return true;
+    if (storedValue === 'false') return false;
+
+    return window.innerWidth >= 768;
+  });
   const [backendStatus, setBackendStatus] = useState<BackendConnectionStatus>(
     storedConnection.accessToken ? 'loading' : 'idle'
   );
@@ -158,14 +176,28 @@ export default function App() {
   const [newNumPhone, setNewNumPhone] = useState('');
   const [newNumProvider, setNewNumProvider] = useState('Baileys');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [createdApiKey, setCreatedApiKey] = useState<{ instanceId: string; apiKey: string; apiKeyPreview: string } | null>(null);
+  const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(
     !storedConnection.accessToken
   );
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [authName, setAuthName] = useState('');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SIDEBAR_STATE_KEY, String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(LANGUAGE_STATE_KEY, state.language === 'RU' ? 'ru' : 'en');
+  }, [state.language]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(THEME_STATE_KEY, state.theme);
+  }, [state.theme]);
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -309,7 +341,9 @@ export default function App() {
       selectedWebhookId: prev.selectedWebhookId,
       selectedLogId: prev.selectedLogId
     }));
-    setSidebarOpen(false);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
     scrollWorkspaceToTop();
   };
   const handleSearchChange = (query: string) => {
@@ -318,6 +352,7 @@ export default function App() {
 
   const handleLanguageChange = (lang: 'RU' | 'EN') => {
     setState(prev => ({ ...prev, language: lang }));
+    void changeLanguage(lang === 'RU' ? 'ru' : 'en');
     triggerToast(lang === 'RU' ? 'Язык изменён на русский' : 'Language set to English');
   };
 
@@ -343,7 +378,6 @@ export default function App() {
     setShowAddNumberModal(false);
     setNewNumName('');
     setNewNumPhone('');
-    setAuthPassword('');
     setBackendUser(null);
     setBackendError(message);
     setBackendStatus('error');
@@ -434,7 +468,6 @@ export default function App() {
       applyDashboardData(dashboard);
       setBackendStatus('connected');
       setShowAuthModal(false);
-      setAuthPassword('');
       replaceRoute(viewRoutes.overview);
       handleViewChange('overview');
       triggerToast(state.language === 'RU' ? 'Подключено к реальному API' : 'Connected to the real API');
@@ -489,23 +522,23 @@ export default function App() {
     }
   };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = authEmail.trim();
-    const password = authPassword.trim();
-
-    if (!email || !password) {
-      setBackendError(state.language === 'RU' ? 'Введите email и пароль.' : 'Enter email and password.');
+  const handleBackendGoogleLogin = async (baseUrl: string, idToken: string) => {
+    setBackendStatus('loading');
+    setBackendError(null);
+    const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+    try {
+      const session = await loginWithGoogleToBackend({
+        apiBaseUrl: normalizedBaseUrl,
+        idToken
+      });
+      await handleBackendSession(normalizedBaseUrl, session.accessToken, session.refreshToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to login with Google';
+      setBackendError(message);
       setBackendStatus('error');
-      return;
+      triggerToast(message);
+      throw error;
     }
-
-    if (authMode === 'register') {
-      await handleBackendRegister(apiBaseUrl, authName.trim() || 'Administrator', email, password);
-      return;
-    }
-
-    await handleBackendLogin(apiBaseUrl, email, password);
   };
 
   const handleBackendDisconnect = () => {
@@ -514,7 +547,6 @@ export default function App() {
     setBackendError(null);
     setBackendStatus('idle');
     setShowAuthModal(true);
-    setAuthPassword('');
     setAccessToken(null);
     setRefreshToken(null);
     setState(createEmptyAppState());
@@ -534,6 +566,16 @@ export default function App() {
         name: newNumName.trim(),
         phoneNumber: newNumPhone.trim()
       });
+      
+      // Check if API key was created
+      const storedApiKey = sessionStorage.getItem('createdInstanceApiKey');
+      if (storedApiKey) {
+        const apiKeyData = JSON.parse(storedApiKey);
+        setCreatedApiKey(apiKeyData);
+        setShowApiKeyModal(true);
+        sessionStorage.removeItem('createdInstanceApiKey');
+      }
+
       const connected = await connectBackendInstance(apiBaseUrl, accessToken, created.id);
 
       setState(prev => ({
@@ -545,7 +587,7 @@ export default function App() {
       setNewNumName('');
       setNewNumPhone('');
       handleViewChange('instances');
-      triggerToast(state.language === 'RU' ? 'Реальный инстанс создан через API' : 'Instance created via API');
+      triggerToast(state.language === 'RU' ? 'Инстанс создан. API ключ сохранён в БД' : 'Instance created. API key saved to DB');
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
@@ -980,6 +1022,26 @@ export default function App() {
     }
   };
 
+  // If not authenticated — render auth page immediately, no Layout flash
+  if (showAuthModal) {
+    return (
+      <AuthPage
+        backendStatus={backendStatus}
+        backendError={backendError}
+        onClearError={() => setBackendError(null)}
+        onLogin={async (email, password) => {
+          await handleBackendLogin(apiBaseUrl, email, password);
+        }}
+        onGoogleLogin={async (idToken) => {
+          await handleBackendGoogleLogin(apiBaseUrl, idToken);
+        }}
+        onRegister={async (input) => {
+          await handleBackendRegister(apiBaseUrl, input.name, input.email, input.password);
+        }}
+      />
+    );
+  }
+
   return (
     <Layout
       state={state}
@@ -993,363 +1055,6 @@ export default function App() {
       onLogout={handleBackendDisconnect}
     >
       {renderViewContent()}
-
-      {false && showAuthModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <form
-            onSubmit={handleAuthSubmit}
-            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20"
-          >
-            <div className="mb-5 flex items-start gap-3 border-b border-slate-100 pb-5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                <Lock className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-extrabold text-slate-950">Авторизация</h3>
-                <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
-                  Сессия не активна. Войдите заново, чтобы продолжить работу с backend API.
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-5 grid grid-cols-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setAuthMode('login')}
-                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${
-                  authMode === 'login'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <LogIn className="h-4 w-4" />
-                Войти
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthMode('register')}
-                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${
-                  authMode === 'register'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <UserPlus className="h-4 w-4" />
-                Регистрация
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {authMode === 'register' && (
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wide text-slate-400">Имя</label>
-                  <input
-                    type="text"
-                    value={authName}
-                    onChange={(e) => setAuthName(e.target.value)}
-                    placeholder="Администратор"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-400">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="admin@asiamsg.com"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-400">Пароль</label>
-                <input
-                  type="password"
-                  required
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  placeholder="Введите пароль"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-              </div>
-            </div>
-
-            {backendError && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
-                {backendError}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={backendStatus === 'loading'}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {backendStatus === 'loading'
-                ? 'Подключение...'
-                : authMode === 'register'
-                  ? 'Создать аккаунт и войти'
-                  : 'Войти заново'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {showAuthModal && (
-        <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#f6faff] text-slate-950">
-          <div className="relative min-h-screen overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_18%,rgba(37,99,235,0.16),transparent_28%),radial-gradient(circle_at_95%_80%,rgba(59,130,246,0.20),transparent_30%),linear-gradient(115deg,#ffffff_0%,#f8fbff_45%,#eaf4ff_100%)]" />
-            <div className="absolute -left-28 bottom-0 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
-            <div className="absolute right-10 top-10 hidden h-44 w-44 rounded-full border border-blue-200/70 lg:block" />
-            <div className="absolute left-[35%] top-0 hidden h-full w-px rotate-12 bg-blue-100 lg:block" />
-
-            <div className="relative mx-auto grid min-h-screen w-full max-w-7xl grid-cols-1 items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:px-12">
-              <section className="flex flex-col justify-center">
-                <div className="mb-12 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-700 text-white shadow-xl shadow-blue-500/25">
-                    <MessageCircle className="h-7 w-7" />
-                  </div>
-                  <div className="text-3xl font-black tracking-tight text-slate-950">
-                    Asia<span className="text-blue-600">Msg</span>
-                  </div>
-                </div>
-
-                <div className="mb-8 inline-flex w-fit items-center gap-2 rounded-full bg-blue-100/80 px-4 py-2 text-sm font-bold text-blue-700 ring-1 ring-blue-200">
-                  <MessageCircle className="h-4 w-4" />
-                  WhatsApp и бизнес-сообщения
-                </div>
-
-                <h1 className="max-w-xl text-4xl font-black leading-tight tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                  Интеграция WhatsApp
-                  <span className="block text-blue-600">для вашего роста</span>
-                </h1>
-                <p className="mt-6 max-w-lg text-base font-medium leading-8 text-slate-600 sm:text-lg">
-                  AsiaMsg объединяет WhatsApp и другие каналы в единую платформу для продаж, поддержки и автоматизации коммуникаций.
-                </p>
-
-                <div className="mt-10 space-y-6">
-                  {[
-                    {
-                      icon: MessageCircle,
-                      title: 'Единый омниканальный чат',
-                      text: 'Все сообщения и обращения клиентов в одном окне.'
-                    },
-                    {
-                      icon: Bot,
-                      title: 'Автоматизация и интеграции',
-                      text: 'Готовые сценарии, рассылки и подключения к CRM/ERP.'
-                    },
-                    {
-                      icon: ShieldCheck,
-                      title: 'Надёжность и безопасность',
-                      text: 'Контроль ролей, журнал событий и защита данных.'
-                    }
-                  ].map(item => (
-                    <div key={item.title} className="flex items-start gap-5">
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-white/80 text-blue-600 shadow-lg shadow-blue-100">
-                        <item.icon className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-extrabold text-slate-950">{item.title}</h3>
-                        <p className="mt-1 max-w-md text-sm font-medium leading-6 text-slate-600">{item.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-12 flex max-w-xl items-center gap-4 rounded-3xl border border-slate-200 bg-white/75 p-4 shadow-xl shadow-blue-100/60 backdrop-blur">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
-                    <Lock className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-extrabold text-slate-950">Надёжная платформа для вашего бизнеса</div>
-                    <div className="mt-1 text-xs font-medium text-slate-500">Соответствие стандартам безопасности и непрерывная доступность.</div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="mx-auto w-full max-w-2xl">
-                <form
-                  onSubmit={handleAuthSubmit}
-                  className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white/88 p-6 shadow-2xl shadow-blue-200/60 backdrop-blur-xl sm:p-10 lg:p-12"
-                >
-                  <div className="pointer-events-none absolute -right-20 top-20 h-56 w-56 rounded-full bg-blue-100/70 blur-3xl" />
-                  <div className="pointer-events-none absolute bottom-0 right-0 h-48 w-48 bg-[radial-gradient(circle,rgba(37,99,235,0.18)_1px,transparent_1px)] [background-size:16px_16px]" />
-
-                  <div className="relative text-center">
-                    <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-blue-600 shadow-inner shadow-blue-200">
-                      {authMode === 'register' ? <UserPlus className="h-10 w-10" /> : <Lock className="h-9 w-9" />}
-                    </div>
-                    <h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                      {authMode === 'register' ? 'Создайте аккаунт' : 'Добро пожаловать!'}
-                    </h2>
-                    <p className="mt-3 text-sm font-medium text-slate-500 sm:text-base">
-                      {authMode === 'register'
-                        ? 'Заполните форму, чтобы начать работу с AsiaMsg'
-                        : 'Войдите в свой аккаунт AsiaMsg'}
-                    </p>
-                  </div>
-
-                  <div className="relative mt-8 space-y-4">
-                    {authMode === 'register' && (
-                      <label className="block">
-                        <span className="sr-only">Ваше имя</span>
-                        <span className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 shadow-sm transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                          <User className="h-5 w-5 text-slate-400" />
-                          <input
-                            type="text"
-                            value={authName}
-                            onChange={(e) => setAuthName(e.target.value)}
-                            placeholder="Ваше имя"
-                            className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                          />
-                        </span>
-                      </label>
-                    )}
-
-                    <label className="block">
-                      <span className="sr-only">Email</span>
-                      <span className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 shadow-sm transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                        <Mail className="h-5 w-5 text-slate-400" />
-                        <input
-                          type="email"
-                          required
-                          value={authEmail}
-                          onChange={(e) => setAuthEmail(e.target.value)}
-                          placeholder="Email"
-                          className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </span>
-                    </label>
-
-                    {authMode === 'register' && (
-                      <label className="block">
-                        <span className="sr-only">Номер телефона</span>
-                        <span className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 shadow-sm">
-                          <Phone className="h-5 w-5 text-slate-400" />
-                          <input
-                            type="tel"
-                            placeholder="(___) ___-__-__"
-                            inputMode="tel"
-                            className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                          />
-                        </span>
-                      </label>
-                    )}
-
-                    <label className="block">
-                      <span className="sr-only">Пароль</span>
-                      <span className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 shadow-sm transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                        <KeyRound className="h-5 w-5 text-slate-400" />
-                        <input
-                          type="password"
-                          required
-                          value={authPassword}
-                          onChange={(e) => setAuthPassword(e.target.value)}
-                          placeholder="Пароль"
-                          className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                        <EyeOff className="h-5 w-5 text-slate-400" />
-                      </span>
-                    </label>
-
-                    {authMode === 'register' && (
-                      <label className="block">
-                        <span className="sr-only">Подтвердите пароль</span>
-                        <span className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 shadow-sm transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                          <KeyRound className="h-5 w-5 text-slate-400" />
-                          <input
-                            type="password"
-                            placeholder="Подтвердите пароль"
-                            className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                          />
-                          <EyeOff className="h-5 w-5 text-slate-400" />
-                        </span>
-                      </label>
-                    )}
-                  </div>
-
-                  {authMode === 'login' ? (
-                    <div className="relative mt-5 flex flex-wrap items-center justify-between gap-3 text-sm">
-                      <label className="flex cursor-pointer items-center gap-2 font-semibold text-slate-600">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
-                          <Check className="h-3.5 w-3.5" />
-                        </span>
-                        Запомнить меня
-                      </label>
-                      <button type="button" className="font-bold text-blue-600 hover:text-blue-700">
-                        Забыли пароль?
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="relative mt-5 flex cursor-pointer items-start gap-3 text-sm font-medium leading-6 text-slate-600">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white" />
-                      <span>
-                        Я принимаю <button type="button" className="font-bold text-blue-600">условия использования</button> и{' '}
-                        <button type="button" className="font-bold text-blue-600">политику конфиденциальности</button>
-                      </span>
-                    </label>
-                  )}
-
-                  {backendError && (
-                    <div className="relative mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-5 text-amber-900">
-                      {backendError}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={backendStatus === 'loading'}
-                    className="relative mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-700 px-5 py-4 text-base font-black text-white shadow-xl shadow-blue-500/25 transition hover:from-sky-400 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {backendStatus === 'loading'
-                      ? 'Подключение...'
-                      : authMode === 'register'
-                        ? 'Создать аккаунт'
-                        : 'Войти'}
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-
-                  <div className="relative my-7 flex items-center gap-5 text-sm font-medium text-slate-400">
-                    <span className="h-px flex-1 bg-slate-200" />
-                    <span>{authMode === 'register' ? 'или' : 'или войдите через'}</span>
-                    <span className="h-px flex-1 bg-slate-200" />
-                  </div>
-
-                  {authMode === 'login' && (
-                    <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-slate-700 shadow-sm hover:border-blue-200 hover:bg-blue-50">
-                        Google
-                      </button>
-                      <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-slate-700 shadow-sm hover:border-blue-200 hover:bg-blue-50">
-                        GitHub
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="relative mt-7 text-center text-sm font-semibold text-slate-500">
-                    {authMode === 'register' ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBackendError(null);
-                        setAuthMode(authMode === 'register' ? 'login' : 'register');
-                      }}
-                      className="font-black text-blue-600 hover:text-blue-700"
-                    >
-                      {authMode === 'register' ? 'Войти' : 'Зарегистрируйтесь'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
 
       {toastMessage && (
         <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 shadow-xl shadow-slate-200/70">
@@ -1443,6 +1148,92 @@ export default function App() {
         </div>
       )}
 
+      {showApiKeyModal && createdApiKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]">
+          <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center gap-2.5 border-b border-slate-100 pb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">API ключ создан</h3>
+                <p className="mt-0.5 text-[10px] text-slate-400">Сохраните ключ в безопасном месте</p>
+              </div>
+            </div>
+
+            <div className="mb-6 space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-400">Instance ID</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdApiKey.instanceId}
+                    className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdApiKey.instanceId);
+                      setApiKeyCopied(true);
+                      setTimeout(() => setApiKeyCopied(false), 2000);
+                    }}
+                    className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                  >
+                    {apiKeyCopied ? '✓' : 'Скопировать'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-400">API Ключ (только сейчас)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdApiKey.apiKey}
+                    className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-mono text-amber-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdApiKey.apiKey);
+                      setApiKeyCopied(true);
+                      setTimeout(() => setApiKeyCopied(false), 2000);
+                    }}
+                    className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-200"
+                  >
+                    {apiKeyCopied ? '✓' : 'Скопировать'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-amber-700">⚠️ Сохраните ключ - он больше не будет показан!</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-400">Использование</label>
+                <pre className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[10px] overflow-auto max-h-24 text-slate-700">
+{`curl -X POST http://localhost:4000/api/messages/text \\
+  -H "X-API-Key: ${createdApiKey.apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"instanceId":"${createdApiKey.instanceId}","remoteJid":"+992922772244","messageText":"Hello"}'`}
+                </pre>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowApiKeyModal(false);
+                setCreatedApiKey(null);
+              }}
+              className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              Понял, ключ сохранён
+            </button>
+          </div>
+        </div>
+      )}
+
       {backendStatus === 'error' && backendError && (
         <div className="fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-lg">
           {backendError}
@@ -1451,11 +1242,3 @@ export default function App() {
     </Layout>
   );
 }
-
-
-
-
-
-
-
-

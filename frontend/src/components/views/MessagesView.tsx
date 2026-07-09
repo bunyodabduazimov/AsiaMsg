@@ -11,6 +11,7 @@ import {
   Search
 } from 'lucide-react';
 import { AppState } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface MessagesViewProps {
   state: AppState;
@@ -30,7 +31,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   onSelectMessage,
   onRefreshMessages
 }) => {
-  const isRu = state.language === 'RU';
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [instanceFilter, setInstanceFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -119,12 +120,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-950">
-            {isRu ? 'Сообщения' : 'Messages'}
+            {t('messages.title')}
           </h1>
           <p className="mt-1 text-xs text-slate-400">
-            {isRu
-              ? 'Таблица входящих и исходящих сообщений WhatsApp.'
-              : 'Table of incoming and outgoing WhatsApp messages.'}
+            {t('messages.subtitle')}
           </p>
         </div>
 
@@ -134,15 +133,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50"
         >
           <RefreshCw className="h-4 w-4" />
-          {isRu ? 'Обновить' : 'Refresh'}
+          {t('instances.refresh')}
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <MetricCard icon={<MessageSquare className="h-5 w-5" />} label={isRu ? 'Всего' : 'Total'} value={stats.total} />
-        <MetricCard icon={<ArrowDownLeft className="h-5 w-5" />} label={isRu ? 'Входящие' : 'Inbound'} value={stats.inbound} />
-        <MetricCard icon={<ArrowUpRight className="h-5 w-5" />} label={isRu ? 'Исходящие' : 'Outbound'} value={stats.outbound} />
-        <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label={isRu ? 'Ошибки' : 'Errors'} value={stats.errors} />
+        <MetricCard icon={<MessageSquare className="h-5 w-5" />} label="Total" value={stats.total} />
+        <MetricCard icon={<ArrowDownLeft className="h-5 w-5" />} label={t('messages.inbound')} value={stats.inbound} />
+        <MetricCard icon={<ArrowUpRight className="h-5 w-5" />} label={t('messages.outbound')} value={stats.outbound} />
+        <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label={t('overview.errors')} value={stats.errors} />
       </div>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -153,7 +152,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               <input
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
-                placeholder={isRu ? 'Поиск по номеру, тексту или ID...' : 'Search by number, text or ID...'}
+                placeholder={t('logs.title') + '...'}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
               />
             </div>
@@ -163,7 +162,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               onChange={event => setInstanceFilter(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
             >
-              <option value="all">{isRu ? 'Все инстансы' : 'All instances'}</option>
+              <option value="all">{t('instances.title')}</option>
               {instanceOptions.map(instance => (
                 <option key={instance} value={instance}>
                   {instance}
@@ -176,11 +175,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               onChange={event => setStatusFilter(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
             >
-              <option value="all">{isRu ? 'Все статусы' : 'All statuses'}</option>
-              <option value="Отправлено">{isRu ? 'Отправлено' : 'Sent'}</option>
-              <option value="Доставлено">{isRu ? 'Доставлено' : 'Delivered'}</option>
-              <option value="Ошибка">{isRu ? 'Ошибка' : 'Error'}</option>
-              <option value="В очереди">{isRu ? 'В очереди' : 'Queued'}</option>
+              <option value="all">{t('messages.status')}</option>
+              <option value="Отправлено">{t('messages.sent')}</option>
+              <option value="Доставлено">{t('messages.delivered')}</option>
+              <option value="Ошибка">{t('common.error')}</option>
+              <option value="В очереди">Queued</option>
             </select>
 
             <select
@@ -188,9 +187,9 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               onChange={event => setTypeFilter(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
             >
-              <option value="all">{isRu ? 'Все типы' : 'All types'}</option>
-              <option value="Входящее">{isRu ? 'Входящее' : 'Inbound'}</option>
-              <option value="Исходящее">{isRu ? 'Исходящее' : 'Outbound'}</option>
+              <option value="all">{t('messages.direction')}</option>
+              <option value="Входящее">{t('messages.inbound')}</option>
+              <option value="Исходящее">{t('messages.outbound')}</option>
             </select>
           </div>
 
@@ -200,7 +199,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
           >
             <Filter className="h-4 w-4" />
-            {isRu ? 'Сбросить' : 'Reset'}
+            Reset
           </button>
         </div>
       </div>
@@ -209,10 +208,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         <div className="border-b border-slate-100 px-5 pt-5">
           <div className="flex flex-wrap gap-2">
             {[
-              { id: 'all' as const, label: isRu ? 'Все' : 'All' },
-              { id: 'inbound' as const, label: isRu ? 'Входящие' : 'Inbound' },
-              { id: 'outbound' as const, label: isRu ? 'Исходящие' : 'Outbound' },
-              { id: 'errors' as const, label: isRu ? 'Ошибки' : 'Errors' }
+              { id: 'all' as const, label: 'All' },
+              { id: 'inbound' as const, label: t('messages.inbound') },
+              { id: 'outbound' as const, label: t('messages.outbound') },
+              { id: 'errors' as const, label: t('overview.errors') }
             ].map(item => (
               <button
                 key={item.id}
@@ -234,13 +233,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           <table className="min-w-full text-left">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
-                <th className="px-5 py-4">{isRu ? 'Дата' : 'Date'}</th>
-                <th className="px-5 py-4">{isRu ? 'Тип' : 'Type'}</th>
-                <th className="px-5 py-4">{isRu ? 'Номер' : 'Number'}</th>
-                <th className="px-5 py-4">{isRu ? 'Инстанс' : 'Instance'}</th>
-                <th className="px-5 py-4">{isRu ? 'Статус' : 'Status'}</th>
-                <th className="px-5 py-4">{isRu ? 'Сообщение' : 'Message'}</th>
-                <th className="px-5 py-4">{isRu ? 'Данные' : 'Data'}</th>
+                <th className="px-5 py-4">{t('messages.time')}</th>
+                <th className="px-5 py-4">{t('messages.direction')}</th>
+                <th className="px-5 py-4">{t('instances.phone')}</th>
+                <th className="px-5 py-4">{t('nav.instances')}</th>
+                <th className="px-5 py-4">{t('messages.status')}</th>
+                <th className="px-5 py-4">{t('messages.content')}</th>
+                <th className="px-5 py-4">Data</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -288,7 +287,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               {!visibleMessages.length && (
                 <tr>
                   <td colSpan={7} className="px-5 py-16 text-center text-sm font-semibold text-slate-400">
-                    {isRu ? 'Сообщения не найдены' : 'No messages found'}
+                    {t('messages.noMessages')}
                   </td>
                 </tr>
               )}
@@ -298,9 +297,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
         <div className="flex flex-col gap-4 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm text-slate-400">
-            {isRu
-              ? `Показано ${visibleMessages.length ? (safePage - 1) * itemsPerPage + 1 : 0}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} из ${filteredMessages.length}`
-              : `Showing ${visibleMessages.length ? (safePage - 1) * itemsPerPage + 1 : 0}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} of ${filteredMessages.length}`}
+            {`Showing ${visibleMessages.length ? (safePage - 1) * itemsPerPage + 1 : 0}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} of ${filteredMessages.length}`}
           </span>
 
           <div className="flex items-center gap-2">

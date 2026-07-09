@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { AppState, Instance } from '../../types';
 import { StatusBadge } from '../StatusBadge';
+import { useTranslation } from 'react-i18next';
 
 interface InstancesViewProps {
   state: AppState;
@@ -67,7 +68,8 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   onUpdateInstanceSettings,
   actionLoading = false
 }) => {
-  const isRu = state.language === 'RU';
+  const { t, i18n } = useTranslation();
+  const isRu = i18n.language === 'ru';
   const [searchQuery, setSearchQuery] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [openMenuStyle, setOpenMenuStyle] = useState<React.CSSProperties | null>(null);
@@ -268,11 +270,11 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               <ChevronLeft className="h-4 w-4" />
-              {isRu ? 'Назад' : 'Back'}
+              {t('common.back')}
             </button>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">{selectedInstance.name} * {selectedInstance.number}</h1>
             <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
-              {isRu ? 'Страница деталей инстанса' : 'Instance details page'}
+              {t('instances.instanceDetail')}
             </p>
           </div>
         </div>
@@ -282,7 +284,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
-                  {isRu ? 'Статус подключения' : 'Connection status'}
+                  {t('instances.connectionStatus')}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <StatusBadge status={selectedInstance.status} size="lg" />
@@ -297,7 +299,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {isRu ? 'Обновить' : 'Refresh'}
+                {t('instances.refresh')}
               </button>
             </div>
 
@@ -312,13 +314,11 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                     />
                     {selectedInstance.qrExpiresAt ? (
                       <p className="text-[11px] font-semibold text-amber-600">
-                        {isRu
-                          ? `QR действует до ${new Date(selectedInstance.qrExpiresAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
-                          : `QR valid until ${new Date(selectedInstance.qrExpiresAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+                        {`QR valid until ${new Date(selectedInstance.qrExpiresAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
                       </p>
                     ) : (
                       <p className="text-[11px] font-semibold text-slate-500">
-                        {isRu ? 'QR действителен 60 секунд после создания' : 'QR is valid for 60 seconds after generation'}
+                        QR is valid for 60 seconds after generation
                       </p>
                     )}
                   </div>
@@ -326,12 +326,12 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                   <div className="flex min-h-40 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 px-5 py-6 text-center text-blue-700 sm:h-56 sm:w-56">
                     <QrCode className="h-14 w-14 sm:h-20 sm:w-20" />
                     <div className="text-sm font-bold leading-5">
-                      {isRu ? 'Нажмите подключить, чтобы получить QR' : 'Press connect to get QR'}
+                      {t('instances.clickToConnect')}
                     </div>
                     <div className="text-xs font-medium text-blue-500">
                       {isConnected
-                        ? (isRu ? 'QR не нужен для активной сессии' : 'QR is not needed for an active session')
-                        : (isRu ? 'QR появится после запроса' : 'QR appears after request')}
+                        ? t('instances.qrNotNeeded')
+                        : 'QR appears after request'}
                     </div>
                   </div>
                 )}
@@ -339,20 +339,20 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
 
               <div className="grid gap-3 md:grid-cols-2">
                 <InfoCard
-                  label={isRu ? 'ID инстанса' : 'Instance ID'}
+                  label={t('instances.instanceId')}
                   value={selectedInstance.id}
                   onCopy={() => void copyToClipboard(selectedInstance.id, 'id')}
                   copied={copiedField === 'id'}
                 />
                 <InfoCard
                   label="Access Token"
-                  value={accessToken ? `${accessToken}` : (isRu ? 'Сессия не авторизована' : 'Session not authorized')}
+                  value={accessToken ? `${accessToken}` : 'Session not authorized'}
                   onCopy={accessToken ? () => void copyToClipboard(`${accessToken}`, 'access-token') : undefined}
                   copied={copiedField === 'access-token'}
                 />
-                <InfoCard label={isRu ? 'Создан' : 'Created'} value={selectedInstance.createdDate || '—'} />
-                <InfoCard label={isRu ? 'Последняя активность' : 'Last active'} value={selectedInstance.lastActive} />
-                <InfoCard label={isRu ? 'Сообщений' : 'Messages'} value={String(selectedInstance.messagesToday)} />
+                <InfoCard label={t('instances.created')} value={selectedInstance.createdDate || '—'} />
+                <InfoCard label={t('instances.lastActivity')} value={selectedInstance.lastActive} />
+                <InfoCard label={t('instances.messages')} value={String(selectedInstance.messagesToday)} />
               </div>
             </div>
 
@@ -364,7 +364,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareCheckBig className="h-4 w-4" />}
-                {isRu ? 'Подключить' : 'Connect'}
+                {t('instances.connect')}
               </button>
               <button
                 type="button"
@@ -373,7 +373,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                {isRu ? 'Получить QR' : 'Get QR'}
+                {t('instances.getQr')}
               </button>
 
               <button
@@ -383,7 +383,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin text-amber-500" /> : <RotateCcw className="h-4 w-4 text-amber-500" />}
-                {isRu ? 'Перезапуск' : 'Reconnect'}
+                {t('instances.restart')}
               </button>
 
               <button
@@ -393,30 +393,30 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
-                {isRu ? 'Отключить' : 'Disconnect'}
+                {t('instances.disconnect')}
               </button>
             </div>
 
             <p className="mt-4 text-xs text-slate-500">
               {isQrState
-                ? (isRu ? 'Сканируйте QR-код в WhatsApp, чтобы привязать устройство.' : 'Scan the QR code in WhatsApp to link the device.')
+                ? 'Scan the QR code in WhatsApp to link the device.'
                 : isConnected
-                  ? (isRu ? 'Сессия активна и готова к работе.' : 'The session is active and ready.')
-                  : (isRu ? 'Состояние инстанса отслеживается по backend.' : 'Instance state is tracked from the backend.')}
+                  ? t('instances.sessionActive')
+                  : 'Instance state is tracked from the backend.'}
             </p>
           </div>
 
           <div className="hidden">
             <div className="grid gap-3 sm:grid-cols-2">
               <InfoCard
-                label={isRu ? 'ID инстанса' : 'Instance ID'}
+                label={t('instances.instanceId')}
                 value={selectedInstance.id}
                 onCopy={() => void copyToClipboard(selectedInstance.id, 'id')}
                 copied={copiedField === 'id'}
               />
               <InfoCard
-                label={isRu ? 'Access Token' : 'Access Token'}
-                value={accessToken ? `${accessToken}` : (isRu ? 'Сессия не авторизована' : 'Session not authorized')}
+                label="Access Token"
+                value={accessToken ? `${accessToken}` : 'Session not authorized'}
                 onCopy={accessToken ? () => void copyToClipboard(`${accessToken}`, 'access-token') : undefined}
                 copied={copiedField === 'access-token'}
               />

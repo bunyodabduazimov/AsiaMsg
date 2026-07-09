@@ -72,7 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({
         />
       )}
 
-      <div className="grid h-full w-full md:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className={`grid h-full w-full ${sidebarOpen ? 'md:grid-cols-[16rem_minmax(0,1fr)]' : 'md:grid-cols-[5rem_minmax(0,1fr)]'}`}>
         {/* Persistent Left Sidebar */}
         <Sidebar
           activeView={state.activeView}
@@ -80,6 +80,7 @@ export const Layout: React.FC<LayoutProps> = ({
           language={state.language}
           theme={resolvedTheme}
           isOpen={sidebarOpen}
+          isCollapsed={!sidebarOpen}
           onClose={onCloseSidebar}
         />
 

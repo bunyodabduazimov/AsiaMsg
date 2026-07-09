@@ -50,6 +50,10 @@ model Instance {
   userId       String
   name         String
   phoneNumber  String?
+  apiKeyHash   String?          @unique
+  apiKeyPreview String?
+  apiKeyCreatedAt DateTime?
+  apiKeyLastUsedAt DateTime?
   status       InstanceStatus   @default(WAITING_QR)
   qrCode       String?          @db.LongText
   createdAt    DateTime         @default(now())

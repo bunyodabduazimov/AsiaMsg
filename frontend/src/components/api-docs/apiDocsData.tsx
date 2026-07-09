@@ -793,9 +793,9 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
 export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string }> = {
   curl: {
     get: `curl --location --request GET 'https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr' \\
---header 'Authorization: Bearer YOUR_TOKEN'`,
+--header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY'`,
     post: `curl --location --request POST 'https://api.asiamsg.com/api/messages/text' \\
---header 'Authorization: Bearer YOUR_TOKEN' \\
+--header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
   "instanceId": "YOUR_INSTANCE_ID",
@@ -806,12 +806,12 @@ export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string 
   },
   js: {
     get: `await fetch('https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr', {
-  headers: { Authorization: 'Bearer YOUR_TOKEN' }
+  headers: { 'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY' }
 });`,
     post: `await fetch('https://api.asiamsg.com/api/messages/text', {
   method: 'POST',
   headers: {
-    Authorization: 'Bearer YOUR_TOKEN',
+    'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -826,14 +826,14 @@ export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string 
     get: `<?php
 $ch = curl_init('https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr');
 curl_setopt_array($ch, [
-  CURLOPT_HTTPHEADER => ['Authorization: Bearer YOUR_TOKEN']
+  CURLOPT_HTTPHEADER => ['X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY']
 ]);`,
     post: `<?php
 $ch = curl_init('https://api.asiamsg.com/api/messages/text');
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
   CURLOPT_HTTPHEADER => [
-    'Authorization: Bearer YOUR_TOKEN',
+    'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
     'Content-Type: application/json'
   ],
   CURLOPT_POSTFIELDS => json_encode([
@@ -849,13 +849,13 @@ curl_setopt_array($ch, [
 
 requests.get(
     'https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr',
-    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+    headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'}
 )`,
     post: `import requests
 
 requests.post(
     'https://api.asiamsg.com/api/messages/text',
-    headers={'Authorization': 'Bearer YOUR_TOKEN'},
+    headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'},
     json={
         'instanceId': 'YOUR_INSTANCE_ID',
         'remoteJid': '+992922772244',

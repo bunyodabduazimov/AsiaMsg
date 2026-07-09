@@ -1,4 +1,6 @@
+import crypto from 'node:crypto';
 import { AppError } from '../middleware/error-handler';
+import { hashToken } from '../utils/jwt';
 import { baileysManager } from '../providers/whatsapp/baileys.manager';
 import { webhookDispatcher } from '../webhooks/webhook.dispatcher';
 import { InstanceRepository } from './instance.repository';
@@ -47,8 +49,23 @@ export class InstanceService {
       name: input.name,
       phoneNumber: input.phoneNumber ?? null
     });
+
+    // Auto-generate API key on instance creation
+    const apiKey = this.createApiKeyValue(instance.id);
+    const apiKeyHash = hashToken(apiKey);
+    const apiKeyPreview = `${apiKey.slice(0, 14)}...`;
+
+    await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyPreview);
     await this.repository.createLog(instance.id, 'info', 'WhatsApp instance created. Waiting for QR scan.');
-    return instance;
+    await this.repository.createLog(instance.id, 'info', `API key auto-generated: ${apiKeyPreview}`);
+
+    // Return instance with full API key (only shown once at creation)
+    return {
+      instance,
+      apiKey,
+      apiKeyPreview,
+      message: 'Instance created. Save API key - it will not be shown again!'
+    };
   }
 
   async getById(userId: string, instanceId: string) {
@@ -261,6 +278,54 @@ export class InstanceService {
     await this.repository.updateStatus(instanceId, 'WAITING_QR', null);
     await this.repository.createLog(instanceId, 'info', 'Instance data cleared');
     return { success: true };
+  }
+
+  async getApiKeyInfo(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+
+    return {
+      success: true,
+      data: {
+        instanceId: instance.id,
+        hasApiKey: Boolean(instance.apiKeyHash),
+        apiKeyPreview: instance.apiKeyPreview ?? null,
+        apiKeyCreatedAt: instance.apiKeyCreatedAt ?? null,
+        apiKeyLastUsedAt: instance.apiKeyLastUsedAt ?? null
+      }
+    };
+  }
+
+  async regenerateApiKey(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    const apiKey = this.createApiKeyValue(instance.id);
+    const apiKeyHash = hashToken(apiKey);
+    const apiKeyPreview = `${apiKey.slice(0, 14)}...`;
+
+    const updatedInstance = await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyPreview);
+    await this.repository.createLog(instance.id, 'info', 'Instance API key regenerated');
+
+    return {
+      success: true,
+      data: {
+        instanceId: updatedInstance.id,
+        apiKey,
+        apiKeyPreview: updatedInstance.apiKeyPreview,
+        apiKeyCreatedAt: updatedInstance.apiKeyCreatedAt
+      }
+    };
+  }
+
+  async revokeApiKey(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+
+    await this.repository.clearApiKey(instance.id);
+    await this.repository.createLog(instance.id, 'info', 'Instance API key revoked');
+
+    return { success: true };
+  }
+
+  private createApiKeyValue(instanceId: string) {
+    return `asm_${instanceId}_${crypto.randomBytes(32).toString('base64url')}`;
   }
 
   restoreSessions() {

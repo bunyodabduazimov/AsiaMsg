@@ -190,6 +190,7 @@ const buildRequestPayload = (endpoint: LocalizedApiDocsEndpoint, values: Record<
 const buildCurlRequest = (endpoint: LocalizedApiDocsEndpoint, apiBaseUrl: string, authToken: string, values: Record<string, string>) => {
   const url = `${apiBaseUrl}${replacePathParams(endpoint.backendPath, values)}`;
   const payload = buildRequestPayload(endpoint, values);
+  const apiKey = authToken || 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY';
 
   if (endpoint.method === 'GET') {
     const query = new URLSearchParams();
@@ -199,10 +200,10 @@ const buildCurlRequest = (endpoint: LocalizedApiDocsEndpoint, apiBaseUrl: string
     const queryString = query.toString();
     const finalUrl = queryString ? `${url}?${queryString}` : url;
 
-    return `curl --location --request GET '${finalUrl}' \\\n--header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}'`;
+    return `curl --location --request GET '${finalUrl}' \\\n--header 'X-API-Key: ${apiKey}'`;
   }
 
-  return `curl --location --request POST '${url}' \\\n--header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}' \\\n--header 'Content-Type: application/json' \\\n--data-raw '${JSON.stringify(payload, null, 2)}'`;
+  return `curl --location --request POST '${url}' \\\n--header 'X-API-Key: ${apiKey}' \\\n--header 'Content-Type: application/json' \\\n--data-raw '${JSON.stringify(payload, null, 2)}'`;
 };
 
 export const ApiEndpointDetails: React.FC<Props> = ({
