@@ -144,3 +144,92 @@ export const getInstanceQr = asyncHandler(async (req: Request, res: Response) =>
   const item = await instanceService.getQr(req.authUser.id, instanceId);
   res.json(item);
 });
+
+export const getInstanceStatus = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.getStatus(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const getInstanceQrCode = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.getQrCode(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const getInstanceMe = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.getMe(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const getInstanceSettings = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.getSettings(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const logoutInstance = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.logout(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const restartInstance = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.restart(req.authUser.id, instanceId);
+  res.json(item);
+});
+
+export const saveInstanceSettings = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const payload = updateInstanceSettingsSchema.partial().parse(req.body ?? {});
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.updateSettings(req.authUser.id, instanceId, payload);
+  res.json({ success: true, data: item.settings });
+});
+
+export const clearInstanceData = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const instanceId = String(req.params.instanceId);
+  const item = await instanceService.clearInstance(req.authUser.id, instanceId);
+  res.json(item);
+});

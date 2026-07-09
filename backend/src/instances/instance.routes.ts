@@ -1,13 +1,21 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
 import {
+  clearInstanceData,
   connectInstance,
   createInstance,
   deleteInstance,
   disconnectInstance,
   getInstance,
+  getInstanceMe,
   getInstanceQr,
+  getInstanceQrCode,
+  getInstanceSettings,
+  getInstanceStatus,
   listInstances,
+  logoutInstance,
+  restartInstance,
+  saveInstanceSettings,
   sendInstanceWebhookTest,
   updateInstance,
   updateInstanceSettings,
@@ -28,5 +36,14 @@ instanceRouter.patch('/:instanceId/status', updateInstanceStatus);
 instanceRouter.post('/:instanceId/connect', connectInstance);
 instanceRouter.post('/:instanceId/disconnect', disconnectInstance);
 instanceRouter.post('/:instanceId/webhook-test', sendInstanceWebhookTest);
-instanceRouter.get('/:instanceId/qr', getInstanceQr);
 instanceRouter.delete('/:instanceId', deleteInstance);
+// --- docs endpoints ---
+instanceRouter.get('/:instanceId/qr', getInstanceQr);
+instanceRouter.get('/:instanceId/status', getInstanceStatus);
+instanceRouter.get('/:instanceId/qrcode', getInstanceQrCode);
+instanceRouter.get('/:instanceId/me', getInstanceMe);
+instanceRouter.get('/:instanceId/settings', getInstanceSettings);
+instanceRouter.post('/:instanceId/logout', logoutInstance);
+instanceRouter.post('/:instanceId/restart', restartInstance);
+instanceRouter.post('/:instanceId/settings', saveInstanceSettings);
+instanceRouter.post('/:instanceId/clear', clearInstanceData);

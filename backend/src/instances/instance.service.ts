@@ -184,6 +184,85 @@ export class InstanceService {
     return updated;
   }
 
+  async getStatus(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    const runtimeStatus = baileysManager.getRuntimeStatus(instance.id);
+    return {
+      success: true,
+      data: {
+        instanceId: instance.id,
+        name: instance.name,
+        status: runtimeStatus ?? instance.status,
+        phoneNumber: instance.phoneNumber ?? null
+      }
+    };
+  }
+
+  async getQrCode(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    const runtimeQr = baileysManager.getRuntimeQr(instance.id);
+    const qrCode = runtimeQr ?? instance.qrCode;
+    return {
+      success: true,
+      data: {
+        instanceId: instance.id,
+        qrCode: qrCode ?? null,
+        expiresAt: qrCode ? new Date(Date.now() + 60_000).toISOString() : null
+      }
+    };
+  }
+
+  async getMe(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    const managed = (baileysManager as any).instances?.get(instance.id);
+    const socketUser = managed?.socket?.user ?? null;
+    return {
+      success: true,
+      data: {
+        instanceId: instance.id,
+        name: instance.name,
+        phoneNumber: instance.phoneNumber ?? null,
+        jid: socketUser?.id ?? null,
+        pushName: socketUser?.name ?? null
+      }
+    };
+  }
+
+  async getSettings(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    return {
+      success: true,
+      data: instance.settings ?? {}
+    };
+  }
+
+  async logout(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    await baileysManager.remove(instance.id);
+    await this.repository.deleteSession(instanceId);
+    await this.repository.updateStatus(instanceId, 'DISCONNECTED', null);
+    await this.repository.createLog(instanceId, 'info', 'Instance logged out');
+    return { success: true };
+  }
+
+  async restart(userId: string, instanceId: string) {
+    const instance = await this.getById(userId, instanceId);
+    await baileysManager.disconnect(instance.id);
+    await this.repository.updateStatus(instanceId, 'CONNECTING', null);
+    await baileysManager.connect(instance, { resetAuth: false });
+    await this.repository.createLog(instanceId, 'info', 'Instance restarted');
+    return { success: true };
+  }
+
+  async clearInstance(userId: string, instanceId: string) {
+    await this.getById(userId, instanceId);
+    await baileysManager.remove(instanceId);
+    await this.repository.deleteSession(instanceId);
+    await this.repository.updateStatus(instanceId, 'WAITING_QR', null);
+    await this.repository.createLog(instanceId, 'info', 'Instance data cleared');
+    return { success: true };
+  }
+
   restoreSessions() {
     return baileysManager.restoreActiveSessions();
   }

@@ -7,36 +7,19 @@ import type { LocalizedApiDocsEndpoint } from './apiDocsData';
 type Props = {
   endpoint: LocalizedApiDocsEndpoint;
   apiBaseUrl: string;
-  isRu: boolean;
   requestTitle: string;
   requestDescription: string;
-  numberLabel: string;
-  numberPlaceholder: string;
-  numberHint: string;
-  showImageField?: boolean;
-  imageUrlLabel?: string;
-  imageUrlPlaceholder?: string;
-  imageUrlHint?: string;
-  imageUrl?: string;
-  onImageUrlChange?: (value: string) => void;
-  showDocumentField?: boolean;
-  documentUrlLabel?: string;
-  documentUrlPlaceholder?: string;
-  documentUrlHint?: string;
-  documentUrl?: string;
-  onDocumentUrlChange?: (value: string) => void;
-  fileNameLabel?: string;
-  fileNamePlaceholder?: string;
-  fileNameHint?: string;
-  fileName?: string;
-  onFileNameChange?: (value: string) => void;
-  textLabel: string;
-  textPlaceholder: string;
-  textHint: string;
+  instances: Array<{
+    id: string;
+    name: string;
+    number: string;
+  }>;
+  selectedInstanceId: string;
+  instanceSelectLabel: string;
+  instanceSelectPlaceholder: string;
   sendLabel: string;
   sendingLabel: string;
   isSending: boolean;
-  fieldSummary: string;
   responseTitle: string;
   responseDescription: string;
   copyUrlLabel: string;
@@ -47,50 +30,193 @@ type Props = {
   curlDescription: string;
   authInstanceId: string;
   authToken: string;
-  onAuthInstanceIdChange: (value: string) => void;
-  remoteJid: string;
-  messageText: string;
+  values: Record<string, string>;
+  onFieldChange: (name: string, value: string) => void;
   responseBodyJson?: string | null;
-  onRemoteJidChange: (value: string) => void;
-  onMessageTextChange: (value: string) => void;
   onSendClick: () => void;
   copiedKey: string | null;
   onCopy: (text: string, key: string) => void;
 };
 
+const replacePathParams = (path: string, values: Record<string, string>, fallback = 'YOUR_INSTANCE_ID') =>
+  path.replace(/\{(\w+)\}|:(\w+)/g, (_, braceName: string, colonName: string) => {
+    const name = braceName || colonName;
+    return values[name]?.trim() || fallback;
+  });
+
+const buildRequestPayload = (endpoint: LocalizedApiDocsEndpoint, values: Record<string, string>) => {
+  const take = (name: string, fallback = '') => values[name]?.trim() || fallback;
+
+  switch (endpoint.id) {
+    case 'messages-chat':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        messageText: take('messageText', 'Hello, this is a test message from AsiaMsg API Docs.'),
+        messageType: 'text'
+      };
+    case 'messages-image':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        imageUrl: take('imageUrl', 'https://example.com/image.jpg'),
+        messageText: take('messageText', 'Hello, this is a test image caption.'),
+        messageType: 'image'
+      };
+    case 'messages-sticker':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        stickerUrl: take('stickerUrl', 'https://example.com/sticker.webp')
+      };
+    case 'messages-document':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        documentUrl: take('documentUrl', 'https://example.com/invoice.pdf'),
+        fileName: take('fileName', 'invoice.pdf'),
+        messageText: take('messageText', 'Invoice attached'),
+        messageType: 'document'
+      };
+    case 'messages-audio':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        audioUrl: take('audioUrl', 'https://example.com/audio.mp3')
+      };
+    case 'messages-voice':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        voiceUrl: take('voiceUrl', 'https://example.com/voice.ogg')
+      };
+    case 'messages-video':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        videoUrl: take('videoUrl', 'https://example.com/video.mp4')
+      };
+    case 'messages-contact':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        name: take('name', 'John Doe'),
+        phoneNumber: take('phoneNumber', '+992922772244')
+      };
+    case 'messages-location':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        latitude: take('latitude', '38.5598'),
+        longitude: take('longitude', '68.7870')
+      };
+    case 'messages-vcard':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        vcard: take('vcard', 'BEGIN:VCARD...')
+      };
+    case 'messages-reaction':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        messageId: take('messageId', 'BAE5A1A1F...'),
+        emoji: take('emoji', '👍')
+      };
+    case 'messages-delete':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        remoteJid: take('remoteJid', '+992922772244'),
+        messageId: take('messageId', 'BAE5A1A1F...')
+      };
+    case 'messages-resend-status':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        status: take('status', 'failed')
+      };
+    case 'messages-resend-id':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+        messageId: take('messageId', 'BAE5A1A1F...')
+      };
+    case 'messages-clear':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID')
+      };
+    case 'messages-list':
+    case 'messages-statistics':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID')
+      };
+    case 'instance-logout':
+    case 'instance-restart':
+    case 'instance-clear':
+    case 'instance-status':
+    case 'instance-qr':
+    case 'instance-qrcode':
+    case 'instance-me':
+    case 'instance-settings':
+      return {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID')
+      };
+    case 'instance-settings-update': {
+      const payload: Record<string, unknown> = {
+        instanceId: take('instanceId', 'YOUR_INSTANCE_ID')
+      };
+      const webhookUrl = take('webhookUrl', '');
+      if (webhookUrl) payload.webhookUrl = webhookUrl;
+      const webhookSecret = take('webhookSecret', '');
+      if (webhookSecret) payload.webhookSecret = webhookSecret;
+      const webhookRetryCount = take('webhookRetryCount', '');
+      if (webhookRetryCount) payload.webhookRetryCount = Number(webhookRetryCount);
+      const boolFields = ['webhookOnReceived','webhookOnCreate','webhookOnAck','webhookDownloadMedia','webhookOnReaction','autoReconnect','storeIncomingMessages','storeOutgoingMessages'] as const;
+      for (const key of boolFields) {
+        const val = take(key, '');
+        if (val !== '') payload[key] = val === 'true';
+      }
+      return payload;
+    }
+    default:
+      return endpoint.fields.reduce<Record<string, string>>((acc, field) => {
+        if (field.name === 'messageType') {
+          return acc;
+        }
+        acc[field.name] = take(field.name, field.example ?? '');
+        return acc;
+      }, {});
+  }
+};
+
+const buildCurlRequest = (endpoint: LocalizedApiDocsEndpoint, apiBaseUrl: string, authToken: string, values: Record<string, string>) => {
+  const url = `${apiBaseUrl}${replacePathParams(endpoint.backendPath, values)}`;
+  const payload = buildRequestPayload(endpoint, values);
+
+  if (endpoint.method === 'GET') {
+    const query = new URLSearchParams();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value) query.set(key, String(value));
+    });
+    const queryString = query.toString();
+    const finalUrl = queryString ? `${url}?${queryString}` : url;
+
+    return `curl --location --request GET '${finalUrl}' \\\n--header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}'`;
+  }
+
+  return `curl --location --request POST '${url}' \\\n--header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}' \\\n--header 'Content-Type: application/json' \\\n--data-raw '${JSON.stringify(payload, null, 2)}'`;
+};
+
 export const ApiEndpointDetails: React.FC<Props> = ({
   endpoint,
   apiBaseUrl,
-  isRu,
   requestTitle,
   requestDescription,
-  numberLabel,
-  numberPlaceholder,
-  numberHint,
-  showImageField,
-  imageUrlLabel,
-  imageUrlPlaceholder,
-  imageUrlHint,
-  imageUrl,
-  onImageUrlChange,
-  showDocumentField,
-  documentUrlLabel,
-  documentUrlPlaceholder,
-  documentUrlHint,
-  documentUrl,
-  onDocumentUrlChange,
-  fileNameLabel,
-  fileNamePlaceholder,
-  fileNameHint,
-  fileName,
-  onFileNameChange,
-  textLabel,
-  textPlaceholder,
-  textHint,
+  instances,
+  selectedInstanceId,
+  instanceSelectLabel,
+  instanceSelectPlaceholder,
   sendLabel,
   sendingLabel,
   isSending,
-  fieldSummary,
   responseTitle,
   responseDescription,
   copyUrlLabel,
@@ -101,162 +227,16 @@ export const ApiEndpointDetails: React.FC<Props> = ({
   curlDescription,
   authInstanceId,
   authToken,
-  onAuthInstanceIdChange,
-  remoteJid,
-  messageText,
+  values,
+  onFieldChange,
   responseBodyJson,
-  onRemoteJidChange,
-  onMessageTextChange,
   onSendClick,
   copiedKey,
   onCopy
 }) => {
-  const url = `${apiBaseUrl}${endpoint.backendPath}`;
-  const isAuthEndpoint = endpoint.groupId === 'auth';
-  const isImage = endpoint.id === 'messages-image';
-  const isDocument = endpoint.id === 'messages-document';
-  const resolvedUrl = url
-    .replace('{instanceId}', authInstanceId || 'YOUR_INSTANCE_ID')
-    .replace(':instanceId', authInstanceId || 'YOUR_INSTANCE_ID');
-  const body = isImage
-    ? {
-        instanceId: authInstanceId || 'YOUR_INSTANCE_ID',
-        remoteJid: remoteJid || '+992922772244',
-        imageUrl: imageUrl || 'https://example.com/image.jpg',
-        messageText: messageText || 'Hello, this is a test caption from AsiaMsg API Docs.',
-        messageType: 'image'
-      }
-    : isDocument
-      ? {
-          instanceId: authInstanceId || 'YOUR_INSTANCE_ID',
-          remoteJid: remoteJid || '+992922772244',
-          documentUrl: documentUrl || 'https://example.com/invoice.pdf',
-          fileName: fileName || 'invoice.pdf',
-          messageText: messageText || 'Hello, this is a test document from AsiaMsg API Docs.',
-          messageType: 'document'
-        }
-      : {
-        instanceId: authInstanceId || 'YOUR_INSTANCE_ID',
-        remoteJid: remoteJid || '+992922772244',
-      messageText: messageText || 'Hello, this is a test message from AsiaMsg API Docs.',
-      messageType: 'text'
-    };
-  const curlPayload = JSON.stringify(
-    body,
-    null,
-    2
-  );
-  const curlRequest = isAuthEndpoint
-    ? `curl --location --request ${endpoint.method} '${resolvedUrl}' \\
---header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}'`
-    : `curl --location --request POST '${url}' \\
---header 'Authorization: Bearer ${authToken || 'YOUR_TOKEN'}' \\
---header 'Content-Type: application/json' \\
---data-raw '${curlPayload}'`;
+  const url = `${apiBaseUrl}${replacePathParams(endpoint.backendPath, values, authInstanceId || 'YOUR_INSTANCE_ID')}`;
+  const curlRequest = buildCurlRequest(endpoint, apiBaseUrl, authToken, values);
   const responseJson = responseBodyJson ?? JSON.stringify(endpoint.response, null, 2);
-
-  if (isAuthEndpoint) {
-    return (
-      <div className="min-w-0 space-y-5">
-        <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <MethodBadge method={endpoint.method} className="px-2.5 py-1 text-[11px]" />
-            <span className="font-mono text-slate-500 dark:text-slate-400">{endpoint.path}</span>
-
-            <button
-              type="button"
-              onClick={() => onCopy(resolvedUrl, `url-${endpoint.id}`)}
-              className="ml-auto inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              {copiedKey === `url-${endpoint.id}` ? copiedUrlLabel : copyUrlLabel}
-            </button>
-          </div>
-
-          <div className="mt-1 space-y-2">
-            <p className="max-w-3xl text-sm text-slate-500 dark:text-slate-400">{endpoint.description}</p>
-          </div>
-        </section>
-
-        <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {isRu ? 'Запрос' : 'Request'}
-              </h3>
-              <p className="mt-1 text-xs text-slate-400">
-                {isRu ? 'Введите данные и отправьте запрос в backend.' : 'Enter data and send the request to backend.'}
-              </p>
-
-              <div className="mt-5 space-y-4">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Instance ID</span>
-                  <input
-                    value={authInstanceId}
-                    onChange={e => onAuthInstanceIdChange(e.target.value)}
-                    placeholder="cmrbnksr60002u20sn3uch0z5"
-                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  />
-                  <div className="text-xs text-slate-400">instanceId * string</div>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={onSendClick}
-                  disabled={isSending}
-                  className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSending ? sendingLabel : sendLabel}
-                </button>
-              </div>
-            </section>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      {isRu ? 'Пример запроса' : 'Request example'}
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {isRu ? 'Используйте Instance ID в пути и Bearer Token в заголовке.' : 'Use Instance ID in path and Bearer Token in header.'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onCopy(curlRequest, `curl-${endpoint.id}`)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copiedKey === `curl-${endpoint.id}` ? copiedLabel : copyLabel}
-                  </button>
-                </div>
-                <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-amber-300">{curlRequest}</pre>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{responseTitle}</h3>
-                    <p className="mt-1 text-xs text-slate-400">{responseDescription}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onCopy(responseJson, `response-${endpoint.id}`)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copiedKey === `response-${endpoint.id}` ? copiedLabel : copyLabel}
-                  </button>
-                </div>
-                <pre className="mt-4 overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-cyan-200">{responseJson}</pre>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    );
-  }
 
   return (
     <div className="min-w-0 space-y-5">
@@ -288,37 +268,17 @@ export const ApiEndpointDetails: React.FC<Props> = ({
               <p className="mt-1 text-xs text-slate-400">{requestDescription}</p>
             </div>
             <ApiRequestTester
-              numberLabel={numberLabel}
-              numberPlaceholder={numberPlaceholder}
-              numberHint={numberHint}
-              showImageField={showImageField}
-              imageLabel={imageUrlLabel}
-              imagePlaceholder={imageUrlPlaceholder}
-              imageHint={imageUrlHint}
-              imageUrl={imageUrl}
-              onImageUrlChange={onImageUrlChange}
-              showDocumentField={showDocumentField}
-              documentUrlLabel={documentUrlLabel}
-              documentUrlPlaceholder={documentUrlPlaceholder}
-              documentUrlHint={documentUrlHint}
-              documentUrl={documentUrl}
-              onDocumentUrlChange={onDocumentUrlChange}
-              fileNameLabel={fileNameLabel}
-              fileNamePlaceholder={fileNamePlaceholder}
-              fileNameHint={fileNameHint}
-              fileName={fileName}
-              onFileNameChange={onFileNameChange}
-              textLabel={textLabel}
-              textPlaceholder={textPlaceholder}
-              textHint={textHint}
+              fields={endpoint.fields}
+              instances={instances}
+              values={values}
+              selectedInstanceId={selectedInstanceId}
+              onFieldChange={onFieldChange}
+              onInstanceChange={value => onFieldChange('instanceId', value)}
+              instanceSelectLabel={instanceSelectLabel}
+              instanceSelectPlaceholder={instanceSelectPlaceholder}
               sendLabel={sendLabel}
               sendingLabel={sendingLabel}
               isSending={isSending}
-              fieldSummary={fieldSummary}
-              remoteJid={remoteJid}
-              messageText={messageText}
-              onRemoteJidChange={onRemoteJidChange}
-              onMessageTextChange={onMessageTextChange}
               onSendClick={onSendClick}
             />
           </section>

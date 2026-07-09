@@ -96,11 +96,11 @@ const simpleJson = (value: unknown) => value as Record<string, unknown>;
 
 export const apiDocsGroups: ApiDocsGroup[] = [
   { id: 'messages', title: text('Сообщения', 'Messages'), icon: <MessageSquare className="h-4 w-4" />, defaultOpen: true },
-  { id: 'instance', title: text('Инстанс', 'Instance'), icon: <KeyRound className="h-4 w-4" />, defaultOpen: true },
-  { id: 'chats', title: text('Чаты', 'Chats'), icon: <FolderOpen className="h-4 w-4" />, defaultOpen: true },
-  { id: 'contacts', title: text('Контакты', 'Contacts'), icon: <Users className="h-4 w-4" />, defaultOpen: true },
-  { id: 'groups', title: text('Группы', 'Groups'), icon: <Users2 className="h-4 w-4" />, defaultOpen: true },
-  { id: 'media', title: text('Медиа', 'Media'), icon: <Image className="h-4 w-4" />, defaultOpen: true }
+  { id: 'instance', title: text('Инстанс', 'Instance'), icon: <KeyRound className="h-4 w-4" />, defaultOpen: false },
+  { id: 'chats', title: text('Чаты', 'Chats'), icon: <FolderOpen className="h-4 w-4" />, defaultOpen: false },
+  { id: 'contacts', title: text('Контакты', 'Contacts'), icon: <Users className="h-4 w-4" />, defaultOpen: false },
+  { id: 'groups', title: text('Группы', 'Groups'), icon: <Users2 className="h-4 w-4" />, defaultOpen: false },
+  { id: 'media', title: text('Медиа', 'Media'), icon: <Image className="h-4 w-4" />, defaultOpen: false }
 ];
 
 export const apiDocsEndpoints: ApiDocsEndpoint[] = [
@@ -427,8 +427,102 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
     description: text('Сохранить настройки инстанса.', 'Save instance settings.'),
     path: '/api/instances/{instanceId}/settings',
     backendPath: '/api/instances/{instanceId}/settings',
-    fields: [instanceIdField],
-    response: simpleJson({ success: true })
+    fields: [
+      instanceIdField,
+      {
+        name: 'webhookUrl',
+        type: 'string',
+        required: false,
+        description: text('URL вебхука', 'Webhook URL'),
+        example: 'https://yourapp.com/api/webhook'
+      },
+      {
+        name: 'webhookSecret',
+        type: 'string',
+        required: false,
+        description: text('Секрет вебхука', 'Webhook secret'),
+        example: 'my-secret-key'
+      },
+      {
+        name: 'webhookRetryCount',
+        type: 'number',
+        required: false,
+        description: text('Кол-во повторов вебхука', 'Webhook retry count'),
+        example: '3'
+      },
+      {
+        name: 'webhookOnReceived',
+        type: 'boolean',
+        required: false,
+        description: text('Вебхук при получении', 'Webhook on received'),
+        example: 'true'
+      },
+      {
+        name: 'webhookOnCreate',
+        type: 'boolean',
+        required: false,
+        description: text('Вебхук при отправке', 'Webhook on create'),
+        example: 'true'
+      },
+      {
+        name: 'webhookOnAck',
+        type: 'boolean',
+        required: false,
+        description: text('Вебхук при подтверждении', 'Webhook on ack'),
+        example: 'true'
+      },
+      {
+        name: 'webhookDownloadMedia',
+        type: 'boolean',
+        required: false,
+        description: text('Скачивать медиа', 'Download media'),
+        example: 'false'
+      },
+      {
+        name: 'webhookOnReaction',
+        type: 'boolean',
+        required: false,
+        description: text('Вебхук при реакции', 'Webhook on reaction'),
+        example: 'true'
+      },
+      {
+        name: 'autoReconnect',
+        type: 'boolean',
+        required: false,
+        description: text('Авто-переподключение', 'Auto reconnect'),
+        example: 'true'
+      },
+      {
+        name: 'storeIncomingMessages',
+        type: 'boolean',
+        required: false,
+        description: text('Хранить входящие', 'Store incoming messages'),
+        example: 'true'
+      },
+      {
+        name: 'storeOutgoingMessages',
+        type: 'boolean',
+        required: false,
+        description: text('Хранить исходящие', 'Store outgoing messages'),
+        example: 'true'
+      }
+    ],
+    response: simpleJson({
+      success: true,
+      data: {
+        webhookUrl: 'https://yourapp.com/api/webhook',
+        webhookSecret: null,
+        webhookRetryCount: 3,
+        webhookOnReceived: true,
+        webhookOnCreate: true,
+        webhookOnAck: true,
+        webhookDownloadMedia: false,
+        webhookOnReaction: true,
+        autoReconnect: true,
+        storeIncomingMessages: true,
+        storeOutgoingMessages: true
+      }
+    })
   },
   {
     id: 'instance-clear',

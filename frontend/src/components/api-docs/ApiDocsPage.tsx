@@ -1,14 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { KeyRound, ShieldCheck, ShieldOff } from 'lucide-react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { ApiDocsSidebar } from './ApiDocsSidebar';
 import { ApiEndpointDetails } from './ApiEndpointDetails';
 import {
   apiDocsEndpoints,
   apiDocsGroups,
-  type ApiDocsEndpoint,
-  type ApiDocsGroup,
-  type LocalizedApiDocsEndpoint,
   type LocalizedApiDocsField,
+  type LocalizedApiDocsEndpoint,
   type LocalizedApiDocsGroup,
   type LocalizedText
 } from './apiDocsData';
@@ -23,125 +20,224 @@ type Props = {
 const draftStorageKey = 'asiamsg.apiDocs.chatDraft';
 const pickText = (text: LocalizedText, isRu: boolean) => (isRu ? text.ru : text.en);
 
-const authDocsGroups: ApiDocsGroup[] = [
-  { id: 'auth', title: { ru: 'Авторизация', en: 'Auth' }, icon: <KeyRound className="h-4 w-4" />, defaultOpen: true }
-];
+const ruGroupTitles: Record<string, string> = {
+  messages: 'Сообщения',
+  instance: 'Инстанс',
+  chats: 'Чаты',
+  contacts: 'Контакты',
+  groups: 'Группы',
+  media: 'Медиа'
+};
 
-const authDocsEndpoints: ApiDocsEndpoint[] = [
+const ruEndpointMeta: Record<
+  string,
   {
-    id: 'auth-qr',
-    groupId: 'auth',
-    method: 'GET',
-    title: { ru: 'QR', en: 'QR' },
-    description: {
-      ru: 'Получить QR-код для авторизации WhatsApp.',
-      en: 'Get a QR code for WhatsApp authorization.'
-    },
-    path: '/api/instances/{instanceId}/qr',
-    backendPath: '/api/instances/{instanceId}/qr',
-    fields: [
-      {
-        name: 'instanceId',
-        type: 'string',
-        required: true,
-        description: { ru: 'ID инстанса', en: 'Instance ID' },
-        example: 'cmrbnksr60002u20sn3uch0z5'
-      }
-    ],
-    response: {
-      success: true,
-      data: { qrCode: 'data:image/png;base64,...', expiresAt: '2026-07-08T12:07:00.000Z' }
+    title?: string;
+    description?: string;
+    fields?: Record<string, string>;
+  }
+> = {
+  'messages-chat': {
+    description: 'Отправка текстового сообщения в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      messageText: 'Текст сообщения',
+      messageType: 'Тип сообщения'
     }
   },
-  {
-    id: 'auth-status',
-    groupId: 'auth',
-    method: 'GET',
-    title: { ru: 'STATUS', en: 'STATUS' },
-    description: {
-      ru: 'Проверить текущий статус инстанса.',
-      en: 'Check the current instance status.'
-    },
-    path: '/api/instances/{instanceId}',
-    backendPath: '/api/instances/{instanceId}',
-    fields: [
-      {
-        name: 'instanceId',
-        type: 'string',
-        required: true,
-        description: { ru: 'ID инстанса', en: 'Instance ID' },
-        example: 'cmrbnksr60002u20sn3uch0z5'
-      }
-    ],
-    response: {
-      success: true,
-      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'CONNECTED', qrCode: null }
+  'messages-image': {
+    description: 'Отправка изображения в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      imageUrl: 'URL изображения',
+      messageText: 'Подпись к изображению'
     }
   },
-  {
-    id: 'auth-connect',
-    groupId: 'auth',
-    method: 'POST',
-    title: { ru: 'CONNECT', en: 'CONNECT' },
-    description: {
-      ru: 'Запустить подключение инстанса и ожидать QR.',
-      en: 'Start instance connection and wait for QR.'
-    },
-    path: '/api/instances/{instanceId}/connect',
-    backendPath: '/api/instances/{instanceId}/connect',
-    fields: [
-      {
-        name: 'instanceId',
-        type: 'string',
-        required: true,
-        description: { ru: 'ID инстанса', en: 'Instance ID' },
-        example: 'cmrbnksr60002u20sn3uch0z5'
-      }
-    ],
-    response: {
-      success: true,
-      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'CONNECTING', qrCode: 'data:image/png;base64,...' }
+  'messages-sticker': {
+    description: 'Отправка стикера в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      stickerUrl: 'URL стикера'
     }
   },
-  {
-    id: 'auth-disconnect',
-    groupId: 'auth',
-    method: 'POST',
-    title: { ru: 'DISCONNECT', en: 'DISCONNECT' },
-    description: {
-      ru: 'Отключить WhatsApp-сессию инстанса.',
-      en: 'Disconnect the WhatsApp session of the instance.'
-    },
-    path: '/api/instances/{instanceId}/disconnect',
-    backendPath: '/api/instances/{instanceId}/disconnect',
-    fields: [
-      {
-        name: 'instanceId',
-        type: 'string',
-        required: true,
-        description: { ru: 'ID инстанса', en: 'Instance ID' },
-        example: 'cmrbnksr60002u20sn3uch0z5'
-      }
-    ],
-    response: {
-      success: true,
-      data: { id: 'cmrbnksr60002u20sn3uch0z5', status: 'DISCONNECTED' }
+  'messages-document': {
+    description: 'Отправка документа в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      documentUrl: 'URL документа',
+      fileName: 'Имя файла',
+      messageText: 'Текст сообщения'
+    }
+  },
+  'messages-audio': {
+    description: 'Отправка аудио в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      audioUrl: 'URL аудио'
+    }
+  },
+  'messages-voice': {
+    description: 'Отправка голосового сообщения в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      voiceUrl: 'URL голосового'
+    }
+  },
+  'messages-video': {
+    description: 'Отправка видео в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      videoUrl: 'URL видео'
+    }
+  },
+  'messages-contact': {
+    description: 'Отправка контакта в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      name: 'Имя контакта',
+      phoneNumber: 'Номер контакта'
+    }
+  },
+  'messages-location': {
+    description: 'Отправка геолокации в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      latitude: 'Широта',
+      longitude: 'Долгота'
+    }
+  },
+  'messages-vcard': {
+    description: 'Отправка vCard в WhatsApp чат.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      vcard: 'vCard'
+    }
+  },
+  'messages-reaction': {
+    description: 'Отправка реакции на сообщение.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      messageId: 'ID сообщения',
+      emoji: 'Эмодзи'
+    }
+  },
+  'messages-delete': {
+    description: 'Удаление сообщения в WhatsApp чате.',
+    fields: {
+      instanceId: 'ID инстанса',
+      remoteJid: 'Номер получателя',
+      messageId: 'ID сообщения'
+    }
+  },
+  'messages-resend-status': {
+    description: 'Повторная отправка по статусу.',
+    fields: {
+      instanceId: 'ID инстанса',
+      status: 'Статус'
+    }
+  },
+  'messages-resend-id': {
+    description: 'Повторная отправка по ID.',
+    fields: {
+      instanceId: 'ID инстанса',
+      messageId: 'ID сообщения'
+    }
+  },
+  'messages-clear': {
+    description: 'Очистка сообщений.',
+    fields: {
+      instanceId: 'ID инстанса'
+    }
+  },
+  'messages-list': {
+    description: 'Получить список сообщений.',
+    fields: {
+      instanceId: 'ID инстанса'
+    }
+  },
+  'messages-statistics': {
+    description: 'Получить статистику сообщений.',
+    fields: {
+      instanceId: 'ID инстанса'
     }
   }
-];
+};
+
+type RequestValues = {
+  remoteJid: string;
+  messageText: string;
+  imageUrl: string;
+  documentUrl: string;
+  fileName: string;
+  stickerUrl: string;
+  audioUrl: string;
+  voiceUrl: string;
+  videoUrl: string;
+  name: string;
+  phoneNumber: string;
+  latitude: string;
+  longitude: string;
+  vcard: string;
+  messageId: string;
+  emoji: string;
+  status: string;
+  chatId: string;
+  contactId: string;
+  groupId: string;
+  fileUrl: string;
+  mediaId: string;
+  date: string;
+};
+
+const defaultRequestValues: RequestValues = {
+  remoteJid: '+992922772244',
+  messageText: 'Hello, this is a test message from AsiaMsg API Docs.',
+  imageUrl: 'https://png.pngtree.com/png-vector/20240827/ourmid/pngtree-purple-flower-and-leaves-frame-template-illustration-png-image_13588629.png',
+  documentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+  fileName: 'dummy.pdf',
+  stickerUrl: 'https://example.com/sticker.webp',
+  audioUrl: 'https://example.com/audio.mp3',
+  voiceUrl: 'https://example.com/voice.ogg',
+  videoUrl: 'https://example.com/video.mp4',
+  name: 'John Doe',
+  phoneNumber: '+992922772244',
+  latitude: '38.5598',
+  longitude: '68.7870',
+  vcard: 'BEGIN:VCARD...',
+  messageId: 'BAE5A1A1F...',
+  emoji: '👍',
+  status: 'failed',
+  chatId: '1203630...',
+  contactId: '992927188976',
+  groupId: '1203630...',
+  fileUrl: 'https://example.com/file.pdf',
+  mediaId: 'cmx123media',
+  date: '2026-07-08'
+};
 
 export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
   const isRu = state.language === 'RU';
   const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
-  const [selectedId, setSelectedId] = useState(authDocsEndpoints[0]?.id ?? apiDocsEndpoints[0]?.id ?? '');
-  const [authOpen, setAuthOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState(apiDocsEndpoints[0]?.id ?? '');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    apiDocsGroups.reduce<Record<string, boolean>>((acc, group) => {
+      acc[group.id] = true;
+      return acc;
+    }, {})
+  );
   const [instanceId, setInstanceId] = useState('');
-  const [token, setToken] = useState('');
-  const [remoteJid, setRemoteJid] = useState('+992922772244');
-  const [messageText, setMessageText] = useState('Hello, this is a test message from AsiaMsg API Docs.');
-  const [imageUrl, setImageUrl] = useState('https://png.pngtree.com/png-vector/20240827/ourmid/pngtree-purple-flower-and-leaves-frame-template-illustration-png-image_13588629.png');
-  const [documentUrl, setDocumentUrl] = useState('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
-  const [fileName, setFileName] = useState('dummy.pdf');
+  const [requestValues, setRequestValues] = useState<RequestValues>(defaultRequestValues);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [responseBodyJson, setResponseBodyJson] = useState<string | null>(null);
   const [requestSending, setRequestSending] = useState(false);
@@ -155,42 +251,36 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
 
   const localizedGroups: LocalizedApiDocsGroup[] = useMemo(
     () =>
-      [...authDocsGroups, ...apiDocsGroups].map(group => ({
+      apiDocsGroups.map(group => ({
         ...group,
-        title: pickText(group.title, isRu)
+        title: isRu ? ruGroupTitles[group.id] ?? pickText(group.title, true) : pickText(group.title, false)
       })),
     [isRu]
   );
 
   const localizedEndpoints: LocalizedApiDocsEndpoint[] = useMemo(
     () =>
-      [...authDocsEndpoints, ...apiDocsEndpoints].map(endpoint => ({
-        ...endpoint,
-        title: pickText(endpoint.title, isRu),
-        description: pickText(endpoint.description, isRu),
-        fields: endpoint.fields.map(
-          (field): LocalizedApiDocsField => ({
-            ...field,
-            description: pickText(field.description, isRu)
-          })
-        )
-      })),
+      apiDocsEndpoints.map(endpoint => {
+        const ruMeta = ruEndpointMeta[endpoint.id];
+
+        return {
+          ...endpoint,
+          title: isRu && ruMeta?.title ? ruMeta.title : pickText(endpoint.title, isRu),
+          description: isRu && ruMeta?.description ? ruMeta.description : pickText(endpoint.description, isRu),
+          fields: endpoint.fields.map(
+            (field): LocalizedApiDocsField => ({
+              ...field,
+              description: isRu && ruMeta?.fields?.[field.name] ? ruMeta.fields[field.name] : pickText(field.description, isRu)
+            })
+          )
+        };
+      }),
     [isRu]
   );
 
   const selectedEndpoint = useMemo(
     () => localizedEndpoints.find(endpoint => endpoint.id === selectedId) ?? localizedEndpoints[0],
     [localizedEndpoints, selectedId]
-  );
-  const isImageEndpoint = selectedEndpoint?.id === 'messages-image';
-  const isDocumentEndpoint = selectedEndpoint?.id === 'messages-document';
-
-  const fieldSummary = useMemo(
-    () =>
-      selectedEndpoint
-        ? selectedEndpoint.fields.map(field => `${field.name}${field.required ? ' *' : ''} ${field.type}`).join(' · ')
-        : '',
-    [selectedEndpoint]
   );
 
   const endpointsByGroup = useMemo(() => {
@@ -203,7 +293,143 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     return grouped;
   }, [localizedEndpoints]);
 
-  const isAuthorized = Boolean(instanceId.trim() && token.trim());
+  const requestFieldValues = useMemo(
+    () => ({
+      ...requestValues,
+      instanceId
+    }),
+    [instanceId, requestValues]
+  );
+
+  const updateRequestField = (name: string, value: string) => {
+    if (name === 'instanceId') {
+      setInstanceId(value);
+      return;
+    }
+
+    setRequestValues(prev => ({ ...prev, [name]: value }));
+  };
+
+  const buildRequestPayload = (endpoint: LocalizedApiDocsEndpoint, values: Record<string, string>) => {
+    const take = (name: string, fallback = '') => values[name]?.trim() || fallback;
+
+    switch (endpoint.id) {
+      case 'messages-chat':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          messageText: take('messageText', 'Hello, this is a test message from AsiaMsg API Docs.'),
+          messageType: 'text'
+        };
+      case 'messages-image':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          imageUrl: take('imageUrl', defaultRequestValues.imageUrl),
+          messageText: take('messageText', 'Hello, this is a test image caption.'),
+          messageType: 'image'
+        };
+      case 'messages-sticker':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          stickerUrl: take('stickerUrl', defaultRequestValues.stickerUrl)
+        };
+      case 'messages-document':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          documentUrl: take('documentUrl', defaultRequestValues.documentUrl),
+          fileName: take('fileName', defaultRequestValues.fileName),
+          messageText: take('messageText', 'Invoice attached'),
+          messageType: 'document'
+        };
+      case 'messages-audio':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          audioUrl: take('audioUrl', defaultRequestValues.audioUrl)
+        };
+      case 'messages-voice':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          voiceUrl: take('voiceUrl', defaultRequestValues.voiceUrl)
+        };
+      case 'messages-video':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          videoUrl: take('videoUrl', defaultRequestValues.videoUrl)
+        };
+      case 'messages-contact':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          name: take('name', defaultRequestValues.name),
+          phoneNumber: take('phoneNumber', defaultRequestValues.phoneNumber)
+        };
+      case 'messages-location':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          latitude: take('latitude', defaultRequestValues.latitude),
+          longitude: take('longitude', defaultRequestValues.longitude)
+        };
+      case 'messages-vcard':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          vcard: take('vcard', defaultRequestValues.vcard)
+        };
+      case 'messages-reaction':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          messageId: take('messageId', defaultRequestValues.messageId),
+          emoji: take('emoji', defaultRequestValues.emoji)
+        };
+      case 'messages-delete':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          remoteJid: take('remoteJid', '+992922772244'),
+          messageId: take('messageId', defaultRequestValues.messageId)
+        };
+      case 'messages-resend-status':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          status: take('status', defaultRequestValues.status)
+        };
+      case 'messages-resend-id':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
+          messageId: take('messageId', defaultRequestValues.messageId)
+        };
+      case 'messages-clear':
+      case 'messages-list':
+      case 'messages-statistics':
+        return {
+          instanceId: take('instanceId', 'YOUR_INSTANCE_ID')
+        };
+      default:
+        return endpoint.fields.reduce<Record<string, string>>((acc, field) => {
+          if (field.name === 'messageType') {
+            return acc;
+          }
+          acc[field.name] = take(field.name, field.example ?? '');
+          return acc;
+        }, {});
+    }
+  };
+
+  const replacePathParams = (path: string, values: Record<string, string>, fallback = 'YOUR_INSTANCE_ID') =>
+    path.replace(/\{(\w+)\}|:(\w+)/g, (_, braceName: string, colonName: string) => {
+      const name = braceName || colonName;
+      return values[name]?.trim() || fallback;
+    });
+
+  const isImageEndpoint = selectedEndpoint?.id === 'messages-image';
+  const isDocumentEndpoint = selectedEndpoint?.id === 'messages-document';
 
   const copyToClipboard = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
@@ -215,9 +441,8 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     const savedDraft = window.localStorage.getItem(draftStorageKey);
     if (savedDraft) {
       try {
-        const parsed = JSON.parse(savedDraft) as { instanceId?: string; token?: string };
+        const parsed = JSON.parse(savedDraft) as { instanceId?: string };
         setInstanceId(parsed.instanceId ?? selectedInstance?.id ?? '');
-        setToken(parsed.token ?? accessToken ?? '');
         return;
       } catch {
         window.localStorage.removeItem(draftStorageKey);
@@ -225,31 +450,22 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     }
 
     setInstanceId(selectedInstance?.id ?? '');
-    setToken(accessToken ?? '');
   }, [accessToken, selectedInstance?.id]);
 
   const saveDraft = () => {
-    window.localStorage.setItem(draftStorageKey, JSON.stringify({ instanceId, token }));
-  };
-
-  const resetDraft = () => {
-    window.localStorage.removeItem(draftStorageKey);
-    setInstanceId(selectedInstance?.id ?? '');
-    setToken(accessToken ?? '');
+    window.localStorage.setItem(draftStorageKey, JSON.stringify({ instanceId }));
   };
 
   const sendPreview = async () => {
     if (requestSending) return;
     saveDraft();
-    const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
-    const isAuthEndpoint = selectedEndpoint.groupId === 'auth';
 
-    if (!instanceId.trim() || !token.trim()) {
+    if (!instanceId.trim() || !accessToken?.trim()) {
       setResponseBodyJson(
         JSON.stringify(
           {
             success: false,
-            message: isRu ? 'Введите Instance ID и Token' : 'Enter Instance ID and Token'
+            message: isRu ? 'Введите Instance ID и Access Token' : 'Enter Instance ID and Access Token'
           },
           null,
           2
@@ -260,14 +476,18 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
 
     try {
       setRequestSending(true);
-      if (isAuthEndpoint) {
-        const authPath = selectedEndpoint.backendPath
-          .replace('{instanceId}', encodeURIComponent(instanceId.trim()))
-          .replace(':instanceId', encodeURIComponent(instanceId.trim()));
-        const response = await fetch(`${apiBaseUrl}${authPath}`, {
-          method: selectedEndpoint.method,
+      const payload = buildRequestPayload(selectedEndpoint, requestFieldValues);
+      const url = `${apiBaseUrl}${replacePathParams(selectedEndpoint.backendPath, requestFieldValues, instanceId.trim())}`;
+      if (selectedEndpoint.method === 'GET') {
+        const query = new URLSearchParams();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value) query.set(key, String(value));
+        });
+        const queryString = query.toString();
+        const response = await fetch(queryString ? `${url}?${queryString}` : url, {
+          method: 'GET',
           headers: {
-            Authorization: `Bearer ${token.trim()}`
+            Authorization: `Bearer ${accessToken?.trim() ?? ''}`
           }
         });
 
@@ -275,7 +495,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         let responsePayload: unknown = rawText;
 
         try {
-          responsePayload = rawText ? JSON.parse(rawText) : { success: response.ok };
+          responsePayload = rawText ? JSON.parse(rawText) : { success: true };
         } catch {
           responsePayload = rawText || { success: response.ok };
         }
@@ -284,35 +504,11 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         return;
       }
 
-      const payload = isImageEndpoint
-        ? {
-            instanceId: instanceId.trim(),
-            remoteJid: remoteJid.trim(),
-            imageUrl: imageUrl.trim(),
-            messageText: messageText.trim(),
-            messageType: 'image'
-          }
-        : isDocumentEndpoint
-          ? {
-              instanceId: instanceId.trim(),
-              remoteJid: remoteJid.trim(),
-              documentUrl: documentUrl.trim(),
-              fileName: fileName.trim(),
-              messageText: messageText.trim(),
-              messageType: 'document'
-            }
-          : {
-            instanceId: instanceId.trim(),
-            remoteJid: remoteJid.trim(),
-            messageText: messageText.trim(),
-            messageType: 'text'
-          };
-
-      const response = await fetch(`${apiBaseUrl}${selectedEndpoint.backendPath}`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token.trim()}`
+          Authorization: `Bearer ${accessToken?.trim() ?? ''}`
         },
         body: JSON.stringify(payload)
       });
@@ -347,18 +543,8 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     ? {
         pageTitle: 'API документация',
         pageDescription: 'Интерактивная справка по API AsiaMsg и примерам запросов.',
-        authButton: 'Авторизация',
-        authorized: 'Авторизован',
-        notAuthorized: 'Не авторизован',
-        modalTitle: 'Авторизация',
-        modalDescription: 'Введите Instance ID (сессия) и Token для запросов.',
-        close: 'Закрыть',
-        reset: 'Сбросить',
-        save: 'Сохранить',
-        instanceLabel: 'Instance ID (сессия)',
-        tokenLabel: 'Token',
-        instancePlaceholder: 'Введите Instance ID',
-        tokenPlaceholder: 'Введите Token',
+        instanceSelectLabel: 'Выбор инстанса',
+        instanceSelectPlaceholder: 'Выберите инстанс',
         requestTitle: 'Запрос',
         requestDescription: isImageEndpoint
           ? 'Поля для отправки изображения в WhatsApp чат.'
@@ -396,18 +582,8 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     : {
         pageTitle: 'API Documentation',
         pageDescription: 'Interactive API reference for AsiaMsg with request examples.',
-        authButton: 'Authorization',
-        authorized: 'Authorized',
-        notAuthorized: 'Not authorized',
-        modalTitle: 'Authorization',
-        modalDescription: 'Enter Instance ID (session) and Token for requests.',
-        close: 'Close',
-        reset: 'Reset',
-        save: 'Save',
-        instanceLabel: 'Instance ID (session)',
-        tokenLabel: 'Token',
-        instancePlaceholder: 'Enter Instance ID',
-        tokenPlaceholder: 'Enter Token',
+        instanceSelectLabel: 'Select instance',
+        instanceSelectPlaceholder: 'Choose an instance',
         requestTitle: 'Request',
         requestDescription: isImageEndpoint
           ? 'Fields for sending an image to WhatsApp chat.'
@@ -450,28 +626,6 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{strings.pageTitle}</h1>
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{strings.pageDescription}</p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setAuthOpen(true)}
-          className={`inline-flex items-center gap-3 rounded-2xl border bg-white px-4 py-2 text-left shadow-sm transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 ${
-            isAuthorized
-              ? 'border-emerald-200 text-emerald-700 dark:border-emerald-900/60 dark:text-emerald-300'
-              : 'border-rose-200 text-rose-700 dark:border-rose-900/60 dark:text-rose-300'
-          }`}
-        >
-          <span
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${
-              isAuthorized ? 'bg-emerald-100 dark:bg-emerald-500/15' : 'bg-rose-100 dark:bg-rose-500/15'
-            }`}
-          >
-            {isAuthorized ? <ShieldCheck className="h-4 w-4" /> : <ShieldOff className="h-4 w-4" />}
-          </span>
-          <span className="flex flex-col leading-tight">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">{strings.authButton}</span>
-            <span className="text-sm font-bold">{isAuthorized ? strings.authorized : strings.notAuthorized}</span>
-          </span>
-        </button>
       </div>
 
       <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -480,41 +634,22 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           endpointsByGroup={endpointsByGroup}
           selectedEndpointId={selectedEndpoint.id}
           onSelectEndpoint={setSelectedId}
+          openGroups={openGroups}
+          onToggleGroup={groupId => setOpenGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))}
         />
 
         <ApiEndpointDetails
           endpoint={selectedEndpoint}
           apiBaseUrl={apiBaseUrl}
-          isRu={isRu}
           requestTitle={strings.requestTitle}
-          requestDescription={strings.requestDescription}
-          numberLabel={strings.numberLabel}
-          numberPlaceholder={strings.numberPlaceholder}
-          numberHint={strings.numberHint}
-          showImageField={isImageEndpoint}
-          imageUrlLabel={strings.imageUrlLabel}
-          imageUrlPlaceholder={strings.imageUrlPlaceholder}
-          imageUrlHint={strings.imageUrlHint}
-          imageUrl={imageUrl}
-          onImageUrlChange={setImageUrl}
-          showDocumentField={isDocumentEndpoint}
-          documentUrlLabel={strings.documentUrlLabel}
-          documentUrlPlaceholder={strings.documentUrlPlaceholder}
-          documentUrlHint={strings.documentUrlHint}
-          documentUrl={documentUrl}
-          onDocumentUrlChange={setDocumentUrl}
-          fileNameLabel={strings.fileNameLabel}
-          fileNamePlaceholder={strings.fileNamePlaceholder}
-          fileNameHint={strings.fileNameHint}
-          fileName={fileName}
-          onFileNameChange={setFileName}
-          textLabel={strings.textLabel}
-          textPlaceholder={strings.textPlaceholder}
-          textHint={strings.textHint}
+          requestDescription={selectedEndpoint?.description ?? strings.requestDescription}
+          instances={state.instances}
+          selectedInstanceId={instanceId}
+          instanceSelectLabel={strings.instanceSelectLabel}
+          instanceSelectPlaceholder={strings.instanceSelectPlaceholder}
           sendLabel={strings.sendLabel}
           sendingLabel={strings.sendingLabel}
           isSending={requestSending}
-          fieldSummary={fieldSummary}
           responseTitle={strings.responseTitle}
           responseDescription={strings.responseDescription}
           curlTitle={strings.curlTitle}
@@ -524,80 +659,16 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           copyLabel={strings.copyLabel}
           copiedLabel={strings.copiedLabel}
           authInstanceId={instanceId}
-          authToken={token}
-          onAuthInstanceIdChange={setInstanceId}
+          authToken={accessToken ?? ''}
+          values={requestFieldValues}
+          onFieldChange={updateRequestField}
           responseBodyJson={responseBodyJson}
-          remoteJid={remoteJid}
-          messageText={messageText}
-          onRemoteJidChange={setRemoteJid}
-          onMessageTextChange={setMessageText}
           onSendClick={sendPreview}
           copiedKey={copiedKey}
           onCopy={copyToClipboard}
         />
       </div>
-
-      {authOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-[24px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{strings.modalTitle}</h2>
-                <p className="mt-1 text-xs text-slate-400">{strings.modalDescription}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAuthOpen(false)}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                {strings.close}
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-1">
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{strings.instanceLabel}</span>
-                <input
-                  value={instanceId}
-                  onChange={e => setInstanceId(e.target.value)}
-                  placeholder={strings.instancePlaceholder}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{strings.tokenLabel}</span>
-                <input
-                  value={token}
-                  onChange={e => setToken(e.target.value)}
-                  placeholder={strings.tokenPlaceholder}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
-              </label>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={resetDraft}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                {strings.reset}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  saveDraft();
-                  setAuthOpen(false);
-                }}
-                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                {strings.save}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 };
+
