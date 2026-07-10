@@ -551,7 +551,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = 
   const strings = isRu
     ? {
         pageTitle: 'API документация',
-        pageDescription: 'Интерактивная справка по API AsiaMsg и примерам запросов.',
+        pageDescription: 'Интерактивная справка по API ChatAPI и примерам запросов.',
         instanceSelectLabel: 'Выбор инстанса',
         instanceSelectPlaceholder: 'Выберите инстанс',
         requestTitle: 'Запрос',
@@ -566,7 +566,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = 
         textLabel: isImageEndpoint ? 'Подпись' : 'Текст',
         textPlaceholder: isImageEndpoint
           ? 'Hello, это тестовая подпись для изображения.'
-          : 'Hello, это тестовое сообщение из AsiaMsg API Docs.',
+          : 'Hello, это тестовое сообщение из ChatAPI API Docs.',
         textHint: 'messageText * string',
         imageUrlLabel: 'URL изображения',
         imageUrlPlaceholder: 'https://example.com/image.jpg',
@@ -590,7 +590,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = 
       }
     : {
         pageTitle: 'API Documentation',
-        pageDescription: 'Interactive API reference for AsiaMsg with request examples.',
+        pageDescription: 'Interactive API reference for ChatAPI with request examples.',
         instanceSelectLabel: 'Select instance',
         instanceSelectPlaceholder: 'Choose an instance',
         requestTitle: 'Request',

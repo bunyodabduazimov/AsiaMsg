@@ -623,10 +623,10 @@ const data = await response.json();`
   },
   php: {
     get: `<?php
-$ch = curl_init('https://api.asiamsg.com/...');
+$ch = curl_init('https://api.chatapi.com/...');
 curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY']);`,
     post: `<?php
-$ch = curl_init('https://api.asiamsg.com/...');
+$ch = curl_init('https://api.chatapi.com/...');
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
   CURLOPT_HTTPHEADER => [
@@ -731,7 +731,7 @@ export const TokensView: React.FC<TokensViewProps> = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">API документация</h1>
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Интерактивная справка по API AsiaMsg и примерам запросов.
+            Интерактивная справка по API ChatAPI и примерам запросов.
           </p>
         </div>
 

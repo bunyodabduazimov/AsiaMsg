@@ -127,7 +127,7 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
         direction: 'outbound',
         remoteJid: '+992922772244',
         messageId: 'BAE5A1A1F...',
-        payload: { text: 'Hello, this is a test message from AsiaMsg API Docs.', type: 'text' },
+        payload: { text: 'Hello, this is a test message from ChatAPI API Docs.', type: 'text' },
         status: 'sent',
         sentAt: '2026-07-08T12:07:00.000Z'
       }
@@ -145,7 +145,7 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
       instanceIdField,
       remoteJidField,
       urlField('imageUrl', 'URL изображения', 'Image URL', 'https://example.com/image.jpg'),
-      urlField('messageText', 'Подпись к изображению', 'Image caption', 'AsiaMsg image', false)
+      urlField('messageText', 'Подпись к изображению', 'Image caption', 'ChatAPI image', false)
     ],
     response: simpleJson({
       success: true,
