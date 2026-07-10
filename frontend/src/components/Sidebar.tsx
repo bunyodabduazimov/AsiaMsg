@@ -61,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex">
               <img
                 src={isCollapsed ? favicon : logo}
-                alt="AsiaMsg"
+                alt="ChatAPI"
                 className={isCollapsed ? 'h-12 object-contain' : 'h-12 object-contain'}
               />
           </div>
@@ -152,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className={`px-2 text-[11px] font-medium leading-relaxed ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            <div>© 2025 AsiaMsg</div>
+            <div>© 2025 ChatAPI</div>
             <div className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
               {t('sidebar.allRightsReserved')}
             </div>

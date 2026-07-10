@@ -25,10 +25,11 @@ import { useTranslation } from 'react-i18next';
 
 interface InstancesViewProps {
   state: AppState;
-  accessToken: string | null;
+  apiKey: string | null;
   onSelectInstance: (id: string | null) => void;
   onAddNumberClick: () => void;
   onUpdateInstanceStatus: (id: string, status: Instance['status']) => void;
+  onLogoutInstance: (id: string) => void;
   onRequestInstanceQr: (id: string) => void;
   onRenameInstance: (id: string, name: string) => void;
   onDeleteInstance: (id: string) => void;
@@ -58,10 +59,11 @@ type WebhookSettingsDraft = {
 
 export const InstancesView: React.FC<InstancesViewProps> = ({
   state,
-  accessToken,
+  apiKey,
   onSelectInstance,
   onAddNumberClick,
   onUpdateInstanceStatus,
+  onLogoutInstance,
   onRequestInstanceQr,
   onRenameInstance,
   onDeleteInstance,
@@ -77,6 +79,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null);
   const [deletingInstance, setDeletingInstance] = useState<Instance | null>(null);
+  const [logoutingInstance, setLogoutingInstance] = useState<Instance | null>(null);
   const [editName, setEditName] = useState('');
   const [webhookDraft, setWebhookDraft] = useState<WebhookSettingsDraft>({
     webhookUrl: '',
@@ -109,6 +112,10 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * itemsPerPage;
   const paginatedInstances = filteredInstances.slice(startIndex, startIndex + itemsPerPage);
+  const apiKeyFallback = isRu
+    ? 'X-API-Key доступен после создания инстанса'
+    : 'X-API-Key is available after instance creation';
+  const phoneValue = selectedInstance?.number?.trim() || '—';
 
   const copyToClipboard = async (text: string, field: string) => {
     try {
@@ -221,6 +228,23 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     setDeletingInstance(null);
   };
 
+  const openLogoutDialog = (instance: Instance) => {
+    if (actionLoading) return;
+    setLogoutingInstance(instance);
+    closeActions();
+  };
+
+  const closeLogoutDialog = () => {
+    if (actionLoading) return;
+    setLogoutingInstance(null);
+  };
+
+  const confirmLogout = () => {
+    if (!logoutingInstance || actionLoading) return;
+    onLogoutInstance(logoutingInstance.id);
+    setLogoutingInstance(null);
+  };
+
   const confirmDelete = () => {
     if (!deletingInstance || actionLoading) return;
     onDeleteInstance(deletingInstance.id);
@@ -272,7 +296,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               <ChevronLeft className="h-4 w-4" />
               {t('common.back')}
             </button>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">{selectedInstance.name} * {selectedInstance.number}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">{selectedInstance.name}</h1>
             <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
               {t('instances.instanceDetail')}
             </p>
@@ -310,7 +334,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                     <img
                       src={selectedInstance.qrCode}
                       alt="WhatsApp QR code"
-                      className="h-44 w-44 object-contain sm:h-48 sm:w-48"
+                      className="h-40 w-40 object-contain sm:h-44 sm:w-44"
                     />
                     {selectedInstance.qrExpiresAt ? (
                       <p className="text-[11px] font-semibold text-amber-600">
@@ -345,14 +369,20 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                   copied={copiedField === 'id'}
                 />
                 <InfoCard
-                  label="Access Token"
-                  value={accessToken ? `${accessToken}` : 'Session not authorized'}
-                  onCopy={accessToken ? () => void copyToClipboard(`${accessToken}`, 'access-token') : undefined}
-                  copied={copiedField === 'access-token'}
+                  label="X-API-Key"
+                  value={apiKey || apiKeyFallback}
+                  onCopy={apiKey ? () => void copyToClipboard(apiKey, 'api-key') : undefined}
+                  copied={copiedField === 'api-key'}
                 />
                 <InfoCard label={t('instances.created')} value={selectedInstance.createdDate || '—'} />
                 <InfoCard label={t('instances.lastActivity')} value={selectedInstance.lastActive} />
                 <InfoCard label={t('instances.messages')} value={String(selectedInstance.messagesToday)} />
+                <InfoCard
+                  label={t('instances.phone')}
+                  value={phoneValue}
+                  onCopy={phoneValue !== '—' ? () => void copyToClipboard(phoneValue, 'phone') : undefined}
+                  copied={copiedField === 'phone'}
+                />
               </div>
             </div>
 
@@ -395,6 +425,16 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
                 {t('instances.disconnect')}
               </button>
+
+              <button
+                type="button"
+                onClick={() => openLogoutDialog(selectedInstance)}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
+                {t('instances.logout')}
+              </button>
             </div>
 
             <p className="mt-4 text-xs text-slate-500">
@@ -415,14 +455,20 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 copied={copiedField === 'id'}
               />
               <InfoCard
-                label="Access Token"
-                value={accessToken ? `${accessToken}` : 'Session not authorized'}
-                onCopy={accessToken ? () => void copyToClipboard(`${accessToken}`, 'access-token') : undefined}
-                copied={copiedField === 'access-token'}
+                label="X-API-Key"
+                value={apiKey || apiKeyFallback}
+                onCopy={apiKey ? () => void copyToClipboard(apiKey, 'api-key') : undefined}
+                copied={copiedField === 'api-key'}
               />
               <InfoCard label={isRu ? 'Создан' : 'Created'} value={selectedInstance.createdDate || '—'} />
               <InfoCard label={isRu ? 'Последняя активность' : 'Last active'} value={selectedInstance.lastActive} />
               <InfoCard label={isRu ? 'Сообщений' : 'Messages'} value={String(selectedInstance.messagesToday)} />
+              <InfoCard
+                label={t('instances.phone')}
+                value={phoneValue}
+                onCopy={phoneValue !== '—' ? () => void copyToClipboard(phoneValue, 'phone') : undefined}
+                copied={copiedField === 'phone'}
+              />
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -891,6 +937,56 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                   >
                     {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     {actionLoading ? (isRu ? 'Удаление...' : 'Deleting...') : (isRu ? 'Удалить' : 'Delete')}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {logoutingInstance && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-300">
+                    <SquareDashedMousePointer className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {isRu ? 'Выйти из WhatsApp?' : 'Logout from WhatsApp?'}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {isRu
+                        ? `Инстанс "${logoutingInstance.name}" будет полностью отвязан от WhatsApp. Для повторного подключения потребуется новый QR-код.`
+                        : `Instance "${logoutingInstance.name}" will be fully unlinked from WhatsApp. A new QR code will be required to connect again.`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+                  {isRu
+                    ? 'Это не временное отключение. Текущая сессия будет завершена полностью.'
+                    : 'This is not a temporary disconnect. The current WhatsApp session will be terminated completely.'}
+                </div>
+
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeLogoutDialog}
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Отмена' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmLogout}
+                    disabled={actionLoading}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
+                    {isRu ? 'Полный Logout' : 'Full Logout'}
                   </button>
                 </div>
               </div>

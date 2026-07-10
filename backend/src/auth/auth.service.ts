@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import type { User } from '@prisma/client';
 import { env } from '../config/env';
 import { AppError } from '../middleware/error-handler';
 import { createRefreshTokenValue, hashToken, signAccessToken } from '../utils/jwt';
@@ -26,7 +27,7 @@ export class AuthService {
   async register(input: RegisterInput): Promise<AuthResponse> {
     const existingUser = await this.authRepository.findUserByEmail(input.email);
     if (existingUser) {
-      throw new AppError('Email is already registered', 409);
+      throw new AppError('Account already exists. Please sign in.', 409);
     }
 
     const passwordHash = await bcrypt.hash(input.password, 12);
@@ -36,21 +37,21 @@ export class AuthService {
       passwordHash
     });
 
-    return this.issueTokens(user.id);
+    return this.issueTokensForUser(user);
   }
 
   async login(input: LoginInput): Promise<AuthResponse> {
     const user = await this.authRepository.findUserByEmail(input.email);
     if (!user) {
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('Account not found or wrong password', 401);
     }
 
     const isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('Account not found or wrong password', 401);
     }
 
-    return this.issueTokens(user.id);
+    return this.issueTokensForUser(user);
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
@@ -99,7 +100,7 @@ export class AuthService {
       });
     }
 
-    return this.issueTokens(user.id);
+    return this.issueTokensForUser(user);
   }
 
   async refresh(input: RefreshInput): Promise<AuthResponse> {
@@ -141,12 +142,7 @@ export class AuthService {
     };
   }
 
-  private async issueTokens(userId: string): Promise<AuthResponse> {
-    const user = await this.authRepository.findUserById(userId);
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
-
+  private async issueTokensForUser(user: User): Promise<AuthResponse> {
     const refreshToken = createRefreshTokenValue();
     const refreshTokenHash = hashToken(refreshToken);
     const expiresAt = new Date();
@@ -178,5 +174,14 @@ export class AuthService {
       accessToken,
       refreshToken
     };
+  }
+
+  private async issueTokens(userId: string): Promise<AuthResponse> {
+    const user = await this.authRepository.findUserById(userId);
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    return this.issueTokensForUser(user);
   }
 }

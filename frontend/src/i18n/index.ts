@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import ru from './locales/ru.json';
 
-const STORAGE_KEY = 'asiamsg_lang';
+const STORAGE_KEY = 'chatapi_lang';
 
 const savedLang = localStorage.getItem(STORAGE_KEY);
 const defaultLang = savedLang === 'ru' || savedLang === 'en' ? savedLang : 'en';

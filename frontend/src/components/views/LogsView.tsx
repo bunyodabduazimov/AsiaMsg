@@ -344,7 +344,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
                       instance_id: selectedLog.instanceId,
                       message: selectedLog.message,
                       context: {
-                        user_agent: "AsiaMsg Worker Engine 2.1",
+                        user_agent: "ChatAPI Worker Engine 2.1",
                         source_ip: "10.124.0.51",
                         database_sync: true
                       }

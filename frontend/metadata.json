@@ -1,6 +1,6 @@
 {
-  "name": "AsiaMsg",
-  "description": "Интеграция WhatsApp и бизнес-сообщений для вашего роста",
+  "name": "ChatAPI",
+  "description": "WhatsApp API для ERP, CRM и сайтов",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

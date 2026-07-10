@@ -29,6 +29,7 @@ import {
   createBackendInstance,
   deleteBackendInstance,
   disconnectBackendInstance,
+  logoutBackendInstance,
   buildWebhookItems,
   fetchBackendInstance,
   fetchBackendInstanceQr,
@@ -56,6 +57,14 @@ import {
 
 type BackendConnectionStatus = 'idle' | 'loading' | 'connected' | 'error';
 
+type CreatedApiKey = {
+  instanceId: string;
+  apiKey: string;
+  apiKeyPreview: string;
+};
+
+const INSTANCE_API_KEYS_STORAGE_KEY = 'chatapi.instanceApiKeys';
+
 const viewRoutes: Record<ActiveView, string> = {
   overview: '/overview',
   instances: '/instances',
@@ -79,9 +88,9 @@ const routeViews: Record<string, ActiveView> = {
   '/settings': 'settings'
 };
 
-const SIDEBAR_STATE_KEY = 'asiamsg.sidebarOpen';
-const LANGUAGE_STATE_KEY = 'asiamsg_lang';
-const THEME_STATE_KEY = 'asiamsg.theme';
+const SIDEBAR_STATE_KEY = 'chatapi.sidebarOpen';
+const LANGUAGE_STATE_KEY = 'chatapi_lang';
+const THEME_STATE_KEY = 'chatapi.theme';
 
 const getInitialLanguage = (): 'RU' | 'EN' => {
   if (typeof window === 'undefined') return 'RU';
@@ -98,6 +107,12 @@ const getInitialTheme = (): 'light' | 'dark' | 'system' => {
     return storedTheme;
   }
   return 'light';
+};
+
+const isAuthSessionError = (error: unknown) => {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 401) return true;
+  return error.status === 404 && /user not found/i.test(error.message);
 };
 
 const getViewFromPath = (path: string): ActiveView => {
@@ -173,16 +188,28 @@ export default function App() {
   const [refreshToken, setRefreshToken] = useState<string | null>(storedConnection.refreshToken);
   const [showAddNumberModal, setShowAddNumberModal] = useState(false);
   const [newNumName, setNewNumName] = useState('');
-  const [newNumPhone, setNewNumPhone] = useState('');
   const [newNumProvider, setNewNumProvider] = useState('Baileys');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [createdApiKey, setCreatedApiKey] = useState<{ instanceId: string; apiKey: string; apiKeyPreview: string } | null>(null);
+  const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
+  const [instanceApiKeys, setInstanceApiKeys] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {};
+
+    try {
+      const raw = window.sessionStorage.getItem(INSTANCE_API_KEYS_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(
     !storedConnection.accessToken
   );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [lastConnectedToastInstanceId, setLastConnectedToastInstanceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -198,6 +225,11 @@ export default function App() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(THEME_STATE_KEY, state.theme);
   }, [state.theme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(INSTANCE_API_KEYS_STORAGE_KEY, JSON.stringify(instanceApiKeys));
+  }, [instanceApiKeys]);
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -312,7 +344,7 @@ export default function App() {
         setBackendStatus('connected');
       } catch (error) {
         if (!isMounted) return;
-        if (error instanceof ApiError && error.status === 401) {
+        if (isAuthSessionError(error)) {
           handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
           return;
         }
@@ -377,7 +409,6 @@ export default function App() {
     setShowAuthModal(true);
     setShowAddNumberModal(false);
     setNewNumName('');
-    setNewNumPhone('');
     setBackendUser(null);
     setBackendError(message);
     setBackendStatus('error');
@@ -391,6 +422,81 @@ export default function App() {
     scrollWorkspaceToTop();
     triggerToast(message);
   };
+
+  useEffect(() => {
+    const selectedInstance = state.instances.find(item => item.id === state.selectedInstanceId) ?? null;
+
+    if (!selectedInstance || !accessToken) {
+      return;
+    }
+
+    const shouldPoll =
+      selectedInstance.status === 'Waiting QR' ||
+      selectedInstance.status === 'Reconnecting';
+
+    if (!shouldPoll) {
+      if (selectedInstance.status !== 'Connected' && lastConnectedToastInstanceId === selectedInstance.id) {
+        setLastConnectedToastInstanceId(null);
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncSelectedInstance = async () => {
+      try {
+        const updated = await fetchBackendInstance(apiBaseUrl, accessToken, selectedInstance.id);
+        if (cancelled) return;
+
+        setState(prev => {
+          const current = prev.instances.find(item => item.id === selectedInstance.id);
+          const nextInstances = prev.instances.map(item =>
+            item.id === selectedInstance.id
+              ? {
+                  ...item,
+                  ...updated,
+                  qrExpiresAt: updated.qrCode ? updated.qrExpiresAt ?? item.qrExpiresAt : undefined
+                }
+              : item
+          );
+
+          if (
+            current &&
+            current.status !== 'Connected' &&
+            updated.status === 'Connected' &&
+            lastConnectedToastInstanceId !== selectedInstance.id
+          ) {
+            setLastConnectedToastInstanceId(selectedInstance.id);
+            triggerToast(
+              state.language === 'RU'
+                ? `WhatsApp успешно подключён: ${updated.number || updated.name}`
+                : `WhatsApp connected successfully: ${updated.number || updated.name}`
+            );
+          }
+
+          return {
+            ...prev,
+            instances: nextInstances
+          };
+        });
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        }
+      }
+    };
+
+    void syncSelectedInstance();
+    const intervalId = window.setInterval(() => {
+      void syncSelectedInstance();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [accessToken, apiBaseUrl, handleAuthRequired, lastConnectedToastInstanceId, state.instances, state.language, state.selectedInstanceId]);
 
   const applyDashboardData = (dashboard: Awaited<ReturnType<typeof fetchDashboard>>) => {
     const messagesByInstance = new Map<string, number>();
@@ -442,7 +548,7 @@ export default function App() {
       applyDashboardData(dashboard);
       triggerToast(state.language === 'RU' ? 'Сообщения обновлены' : 'Messages refreshed');
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isAuthSessionError(error)) {
         handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         return;
       }
@@ -472,7 +578,7 @@ export default function App() {
       handleViewChange('overview');
       triggerToast(state.language === 'RU' ? 'Подключено к реальному API' : 'Connected to the real API');
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isAuthSessionError(error)) {
         handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         return;
       }
@@ -557,14 +663,13 @@ export default function App() {
 
   const handleAddNumberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNumName.trim() || !newNumPhone.trim()) return;
+    if (!newNumName.trim()) return;
     if (pendingAction) return;
 
     try {
       setPendingAction('instance:create');
       const created = await createBackendInstance(apiBaseUrl, accessToken, {
-        name: newNumName.trim(),
-        phoneNumber: newNumPhone.trim()
+        name: newNumName.trim()
       });
       
       // Check if API key was created
@@ -572,6 +677,10 @@ export default function App() {
       if (storedApiKey) {
         const apiKeyData = JSON.parse(storedApiKey);
         setCreatedApiKey(apiKeyData);
+        setInstanceApiKeys(prev => ({
+          ...prev,
+          [apiKeyData.instanceId]: apiKeyData.apiKey
+        }));
         setShowApiKeyModal(true);
         sessionStorage.removeItem('createdInstanceApiKey');
       }
@@ -585,7 +694,6 @@ export default function App() {
       }));
       setShowAddNumberModal(false);
       setNewNumName('');
-      setNewNumPhone('');
       handleViewChange('instances');
       triggerToast(state.language === 'RU' ? 'Инстанс создан. API ключ сохранён в БД' : 'Instance created. API key saved to DB');
     } catch (error) {
@@ -679,6 +787,41 @@ export default function App() {
         return;
       }
       const message = error instanceof Error ? error.message : 'Failed to get QR';
+      triggerToast(message);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleLogoutInstance = async (id: string) => {
+    if (pendingAction) return;
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+      return;
+    }
+
+    try {
+      setPendingAction(`instance:logout:${id}`);
+      await logoutBackendInstance(apiBaseUrl, accessToken, id);
+      const updated = await fetchBackendInstance(apiBaseUrl, accessToken, id);
+
+      setState(prev => ({
+        ...prev,
+        instances: prev.instances.map(item => (item.id === id ? updated : item)),
+        selectedInstanceId: id
+      }));
+
+      triggerToast(
+        state.language === 'RU'
+          ? 'WhatsApp полностью отвязан. Для подключения нужен новый QR.'
+          : 'WhatsApp fully logged out. New QR is required to connect again.'
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to logout WhatsApp instance';
       triggerToast(message);
     } finally {
       setPendingAction(null);
@@ -962,16 +1105,17 @@ export default function App() {
         return (
           <InstancesView
             state={state}
-          accessToken={accessToken}
-          onSelectInstance={handleSelectInstance}
-          onAddNumberClick={() => setShowAddNumberModal(true)}
-          onUpdateInstanceStatus={handleUpdateInstanceStatus}
-          onRequestInstanceQr={handleRequestInstanceQr}
-          onRenameInstance={handleRenameInstance}
-          onDeleteInstance={handleDeleteInstance}
-          onUpdateInstanceSettings={handleUpdateInstanceSettings}
-          actionLoading={pendingAction !== null}
-        />
+            apiKey={state.selectedInstanceId ? instanceApiKeys[state.selectedInstanceId] ?? null : null}
+            onSelectInstance={handleSelectInstance}
+            onAddNumberClick={() => setShowAddNumberModal(true)}
+            onUpdateInstanceStatus={handleUpdateInstanceStatus}
+            onLogoutInstance={handleLogoutInstance}
+            onRequestInstanceQr={handleRequestInstanceQr}
+            onRenameInstance={handleRenameInstance}
+            onDeleteInstance={handleDeleteInstance}
+            onUpdateInstanceSettings={handleUpdateInstanceSettings}
+            actionLoading={pendingAction !== null}
+          />
         );
       case 'messages':
         return (
@@ -987,7 +1131,11 @@ export default function App() {
         );
       case 'tokens':
         return (
-          <ApiDocsPage state={state} accessToken={accessToken} />
+          <ApiDocsPage
+            state={state}
+            apiKey={state.selectedInstanceId ? instanceApiKeys[state.selectedInstanceId] ?? null : null}
+            instanceApiKeys={instanceApiKeys}
+          />
         );
       case 'webhooks':
         return (
@@ -1098,18 +1246,6 @@ export default function App() {
                   onChange={(e) => setNewNumName(e.target.value)}
                   placeholder="Например, Sales Bot"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase text-slate-400">Номер телефона</label>
-                <input
-                  type="text"
-                  required
-                  value={newNumPhone}
-                  onChange={(e) => setNewNumPhone(e.target.value)}
-                  placeholder="Введите номер в любом формате"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
                 />
               </div>
 

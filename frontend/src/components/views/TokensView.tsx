@@ -599,19 +599,19 @@ const endpoints: DocEndpoint[] = [
 
 const codeSamples: Record<DocTab, { get: string; post: string }> = {
   curl: {
-    get: `curl --location --request GET 'https://api.asiamsg.com/...' \\
+    get: `curl --location --request GET 'https://api.chatapi.com/...' \\
 --header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY'`,
-    post: `curl --location --request POST 'https://api.asiamsg.com/...' \\
+    post: `curl --location --request POST 'https://api.chatapi.com/...' \\
 --header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{ }'`
   },
   js: {
-    get: `const response = await fetch('https://api.asiamsg.com/...', {
+    get: `const response = await fetch('https://api.chatapi.com/...', {
   headers: { 'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY' }
 });
 const data = await response.json();`,
-    post: `const response = await fetch('https://api.asiamsg.com/...', {
+    post: `const response = await fetch('https://api.chatapi.com/...', {
   method: 'POST',
   headers: {
     'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
@@ -639,13 +639,13 @@ curl_setopt_array($ch, [
     get: `import requests
 
 response = requests.get(
-    'https://api.asiamsg.com/...',
+    'https://api.chatapi.com/...',
     headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'}
 )`,
     post: `import requests
 
 response = requests.post(
-    'https://api.asiamsg.com/...',
+    'https://api.chatapi.com/...',
     headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'},
     json={}
 )`

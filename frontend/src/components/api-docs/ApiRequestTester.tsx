@@ -1,4 +1,5 @@
 import React from 'react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import type { LocalizedApiDocsField } from './apiDocsData';
 
 type Props = {
@@ -18,6 +19,7 @@ type Props = {
   sendingLabel: string;
   isSending: boolean;
   onSendClick: () => void;
+  hasApiKey?: boolean;
 };
 
 const isTextareaField = (name: string) => name === 'messageText' || name === 'vcard';
@@ -40,7 +42,8 @@ export const ApiRequestTester: React.FC<Props> = ({
   sendLabel,
   sendingLabel,
   isSending,
-  onSendClick
+  onSendClick,
+  hasApiKey = false
 }) => {
   const visibleFields = fields.filter(field => field.name !== 'messageType' && field.name !== 'instanceId');
 
@@ -48,7 +51,24 @@ export const ApiRequestTester: React.FC<Props> = ({
     <section className="rounded-[18px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
       <div className="space-y-4">
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{instanceSelectLabel}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{instanceSelectLabel}</span>
+            {selectedInstanceId && (
+              <div className="flex items-center gap-1">
+                {hasApiKey ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-xs text-green-600 dark:text-green-400">API Key ready</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs text-amber-600 dark:text-amber-400">No API Key</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <select
             value={selectedInstanceId}
             onChange={e => onInstanceChange(e.target.value)}

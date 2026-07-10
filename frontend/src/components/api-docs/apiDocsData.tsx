@@ -81,7 +81,7 @@ const messageTextField: ApiDocsField = {
   type: 'string',
   required: true,
   description: text('Текст сообщения', 'Message text'),
-  example: 'Hello, this is a test message from AsiaMsg API Docs.'
+  example: 'Hello, this is a test message from ChatAPI API Docs.'
 };
 
 const urlField = (name: string, ru: string, en: string, example: string, required = true): ApiDocsField => ({
@@ -155,7 +155,7 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
         direction: 'outbound',
         remoteJid: '+992922772244',
         messageId: 'BAE5A1IMG...',
-        payload: { imageUrl: 'https://example.com/image.jpg', caption: 'AsiaMsg image' },
+        payload: { imageUrl: 'https://example.com/image.jpg', caption: 'ChatAPI image' },
         status: 'sent',
         sentAt: '2026-07-08T12:07:00.000Z'
       }
@@ -753,7 +753,7 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
     path: '/api/groups/{groupId}',
     backendPath: '/api/groups/{groupId}',
     fields: [instanceIdField, urlField('groupId', 'ID группы', 'Group ID', '1203630...')],
-    response: simpleJson({ success: true, data: { id: '1203630...', subject: 'AsiaMsg Team' } })
+    response: simpleJson({ success: true, data: { id: '1203630...', subject: 'ChatAPI Team' } })
   },
   {
     id: 'media-upload',
@@ -792,9 +792,9 @@ export const apiDocsEndpoints: ApiDocsEndpoint[] = [
 
 export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string }> = {
   curl: {
-    get: `curl --location --request GET 'https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr' \\
+    get: `curl --location --request GET 'https://api.chatapi.com/api/instances/YOUR_INSTANCE_ID/qr' \\
 --header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY'`,
-    post: `curl --location --request POST 'https://api.asiamsg.com/api/messages/text' \\
+    post: `curl --location --request POST 'https://api.chatapi.com/api/messages/text' \\
 --header 'X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
@@ -805,10 +805,10 @@ export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string 
 }'`
   },
   js: {
-    get: `await fetch('https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr', {
+    get: `await fetch('https://api.chatapi.com/api/instances/YOUR_INSTANCE_ID/qr', {
   headers: { 'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY' }
 });`,
-    post: `await fetch('https://api.asiamsg.com/api/messages/text', {
+    post: `await fetch('https://api.chatapi.com/api/messages/text', {
   method: 'POST',
   headers: {
     'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY',
@@ -824,12 +824,12 @@ export const apiDocsCodeSamples: Record<ApiDocsTab, { get: string; post: string 
   },
   php: {
     get: `<?php
-$ch = curl_init('https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr');
+$ch = curl_init('https://api.chatapi.com/api/instances/YOUR_INSTANCE_ID/qr');
 curl_setopt_array($ch, [
   CURLOPT_HTTPHEADER => ['X-API-Key: asm_YOUR_INSTANCE_ID_YOUR_API_KEY']
 ]);`,
     post: `<?php
-$ch = curl_init('https://api.asiamsg.com/api/messages/text');
+$ch = curl_init('https://api.chatapi.com/api/messages/text');
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
   CURLOPT_HTTPHEADER => [
@@ -848,13 +848,13 @@ curl_setopt_array($ch, [
     get: `import requests
 
 requests.get(
-    'https://api.asiamsg.com/api/instances/YOUR_INSTANCE_ID/qr',
+    'https://api.chatapi.com/api/instances/YOUR_INSTANCE_ID/qr',
     headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'}
 )`,
     post: `import requests
 
 requests.post(
-    'https://api.asiamsg.com/api/messages/text',
+    'https://api.chatapi.com/api/messages/text',
     headers={'X-API-Key': 'asm_YOUR_INSTANCE_ID_YOUR_API_KEY'},
     json={
         'instanceId': 'YOUR_INSTANCE_ID',

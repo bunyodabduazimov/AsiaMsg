@@ -174,8 +174,8 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
           </h1>
           <p className="mt-1 text-xs text-slate-400">
             {isRu
-              ? 'Настройка URL для получения событий WhatsApp из AsiaMsg.'
-              : 'Configure URLs that receive WhatsApp events from AsiaMsg.'}
+              ? 'Настройка URL для получения событий WhatsApp из ChatAPI.'
+              : 'Configure URLs that receive WhatsApp events from ChatAPI.'}
           </p>
         </div>
 

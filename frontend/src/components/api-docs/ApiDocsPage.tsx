@@ -14,10 +14,11 @@ import type { AppState } from '../../types';
 
 type Props = {
   state: AppState;
-  accessToken: string | null;
+  apiKey: string | null;
+  instanceApiKeys?: Record<string, string>;
 };
 
-const draftStorageKey = 'asiamsg.apiDocs.chatDraft';
+const draftStorageKey = 'chatapi.apiDocs.chatDraft';
 const pickText = (text: LocalizedText, isRu: boolean) => (isRu ? text.ru : text.en);
 
 const ruGroupTitles: Record<string, string> = {
@@ -202,7 +203,7 @@ type RequestValues = {
 
 const defaultRequestValues: RequestValues = {
   remoteJid: '+992922772244',
-  messageText: 'Hello, this is a test message from AsiaMsg API Docs.',
+  messageText: 'Hello, this is a test message from ChatAPI API Docs.',
   imageUrl: 'https://png.pngtree.com/png-vector/20240827/ourmid/pngtree-purple-flower-and-leaves-frame-template-illustration-png-image_13588629.png',
   documentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
   fileName: 'dummy.pdf',
@@ -226,7 +227,7 @@ const defaultRequestValues: RequestValues = {
   date: '2026-07-08'
 };
 
-export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
+export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = {} }) => {
   const isRu = state.language === 'RU';
   const apiBaseUrl = normalizeApiBaseUrl(getDefaultApiBaseUrl());
   const [selectedId, setSelectedId] = useState(apiDocsEndpoints[0]?.id ?? '');
@@ -241,6 +242,14 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [responseBodyJson, setResponseBodyJson] = useState<string | null>(null);
   const [requestSending, setRequestSending] = useState(false);
+
+  // Get API key for currently selected instance
+  const currentApiKey = useMemo(() => {
+    if (instanceId && instanceApiKeys[instanceId]) {
+      return instanceApiKeys[instanceId];
+    }
+    return apiKey;
+  }, [instanceId, instanceApiKeys, apiKey]);
 
   const selectedInstance = useMemo(() => {
     if (state.selectedInstanceId) {
@@ -318,7 +327,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         return {
           instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
           remoteJid: take('remoteJid', '+992922772244'),
-          messageText: take('messageText', 'Hello, this is a test message from AsiaMsg API Docs.'),
+          messageText: take('messageText', 'Hello, this is a test message from ChatAPI API Docs.'),
           messageType: 'text'
         };
       case 'messages-image':
@@ -450,7 +459,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     }
 
     setInstanceId(selectedInstance?.id ?? '');
-  }, [accessToken, selectedInstance?.id]);
+  }, [apiKey, selectedInstance?.id]);
 
   const saveDraft = () => {
     window.localStorage.setItem(draftStorageKey, JSON.stringify({ instanceId }));
@@ -460,12 +469,12 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
     if (requestSending) return;
     saveDraft();
 
-    if (!instanceId.trim() || !accessToken?.trim()) {
+    if (!instanceId.trim() || !currentApiKey?.trim()) {
       setResponseBodyJson(
         JSON.stringify(
           {
             success: false,
-            message: isRu ? 'Введите Instance ID и Access Token' : 'Enter Instance ID and Access Token'
+            message: isRu ? 'Введите Instance ID и X-API-Key' : 'Enter Instance ID and X-API-Key'
           },
           null,
           2
@@ -487,7 +496,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         const response = await fetch(queryString ? `${url}?${queryString}` : url, {
           method: 'GET',
           headers: {
-            Authorization: `Bearer ${accessToken?.trim() ?? ''}`
+            'X-API-Key': currentApiKey?.trim() ?? ''
           }
         });
 
@@ -508,7 +517,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken?.trim() ?? ''}`
+          'X-API-Key': currentApiKey?.trim() ?? ''
         },
         body: JSON.stringify(payload)
       });
@@ -596,7 +605,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
         textLabel: isImageEndpoint ? 'Caption' : 'Text',
         textPlaceholder: isImageEndpoint
           ? 'Hello, this is a test image caption.'
-          : 'Hello, this is a test message from AsiaMsg API Docs.',
+          : 'Hello, this is a test message from ChatAPI API Docs.',
         textHint: 'messageText * string',
         imageUrlLabel: 'Image URL',
         imageUrlPlaceholder: 'https://example.com/image.jpg',
@@ -659,7 +668,7 @@ export const ApiDocsPage: React.FC<Props> = ({ state, accessToken }) => {
           copyLabel={strings.copyLabel}
           copiedLabel={strings.copiedLabel}
           authInstanceId={instanceId}
-          authToken={accessToken ?? ''}
+          authToken={currentApiKey ?? ''}
           values={requestFieldValues}
           onFieldChange={updateRequestField}
           responseBodyJson={responseBodyJson}

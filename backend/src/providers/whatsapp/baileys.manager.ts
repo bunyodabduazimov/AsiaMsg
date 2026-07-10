@@ -49,6 +49,7 @@ type ConnectOptions = {
 
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
+  private readonly manualDisconnects = new Set<string>();
   private readonly qrWaiters = new Map<string, QrWaiter[]>();
   private readonly connectionWaiters = new Map<string, ConnectionWaiter[]>();
   private readonly repository = new InstanceRepository();
@@ -248,7 +249,12 @@ export class BaileysManager {
 
       if (update.connection === 'close') {
         const statusCode = (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const wasManuallyDisconnected = this.manualDisconnects.has(instance.id);
+        if (wasManuallyDisconnected) {
+          this.manualDisconnects.delete(instance.id);
+        }
+
+        const shouldReconnect = !wasManuallyDisconnected && statusCode !== DisconnectReason.loggedOut;
         const nextStatus = managed.qrCode ? 'WAITING_QR' : 'DISCONNECTED';
 
         this.instances.delete(instance.id);
@@ -291,10 +297,14 @@ export class BaileysManager {
     return managed;
   }
 
-  async disconnect(instanceId: string) {
+  async disconnect(instanceId: string, isUserInitiated: boolean = false) {
     const managed = this.instances.get(instanceId);
     if (!managed) {
       return;
+    }
+
+    if (isUserInitiated) {
+      this.manualDisconnects.add(instanceId);
     }
 
     managed.socket.end(undefined);

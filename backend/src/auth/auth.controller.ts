@@ -79,11 +79,6 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.authUser) {
-    res.status(401).json({ message: 'Unauthorized' });
-    return;
-  }
-
-  const result = await authService.me(req.authUser.id);
+  const result = await authService.me(req.authUser!.id);
   res.json(result);
 });

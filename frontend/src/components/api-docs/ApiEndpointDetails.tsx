@@ -52,7 +52,7 @@ const buildRequestPayload = (endpoint: LocalizedApiDocsEndpoint, values: Record<
       return {
         instanceId: take('instanceId', 'YOUR_INSTANCE_ID'),
         remoteJid: take('remoteJid', '+992922772244'),
-        messageText: take('messageText', 'Hello, this is a test message from AsiaMsg API Docs.'),
+        messageText: take('messageText', 'Hello, this is a test message from ChatAPI API Docs.'),
         messageType: 'text'
       };
     case 'messages-image':
@@ -281,6 +281,7 @@ export const ApiEndpointDetails: React.FC<Props> = ({
               sendingLabel={sendingLabel}
               isSending={isSending}
               onSendClick={onSendClick}
+              hasApiKey={Boolean(authToken?.trim())}
             />
           </section>
 

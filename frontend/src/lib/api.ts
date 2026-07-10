@@ -1,9 +1,9 @@
 import type { ApiToken, Instance, LogEntry, Message, Webhook } from '../types';
 
 const STORAGE_KEYS = {
-  apiBaseUrl: 'asiamsg.apiBaseUrl',
-  accessToken: 'asiamsg.accessToken',
-  refreshToken: 'asiamsg.refreshToken'
+  apiBaseUrl: 'chatapi.apiBaseUrl',
+  accessToken: 'chatapi.accessToken',
+  refreshToken: 'chatapi.refreshToken'
 } as const;
 
 export type BackendRole = 'USER' | 'ADMIN';
@@ -234,6 +234,37 @@ export const clearStoredConnection = () => {
   window.localStorage.removeItem(STORAGE_KEYS.refreshToken);
 };
 
+const extractApiErrorMessage = (rawBody: string, status: number) => {
+  const fallback = `Request failed with ${status}`;
+  const trimmedBody = rawBody.trim();
+
+  if (!trimmedBody) return fallback;
+
+  try {
+    const parsed = JSON.parse(trimmedBody) as {
+      message?: unknown;
+      error?: unknown;
+      details?: unknown;
+    };
+
+    if (typeof parsed.message === 'string' && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+
+    if (typeof parsed.error === 'string' && parsed.error.trim()) {
+      return parsed.error.trim();
+    }
+
+    if (typeof parsed.details === 'string' && parsed.details.trim()) {
+      return parsed.details.trim();
+    }
+  } catch {
+    return trimmedBody;
+  }
+
+  return fallback;
+};
+
 export const fetchJson = async <T,>(
   apiBaseUrl: string,
   path: string,
@@ -251,7 +282,8 @@ export const fetchJson = async <T,>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ApiError(body || `Request failed with ${response.status}`, response.status);
+    const message = extractApiErrorMessage(body, response.status);
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -392,6 +424,15 @@ export const disconnectBackendInstance = (
   fetchJson<BackendInstance>(apiBaseUrl, `/api/instances/${instanceId}/disconnect`, {
     method: 'POST'
   }, accessToken).then(mapBackendInstanceToUi);
+
+export const logoutBackendInstance = (
+  apiBaseUrl: string,
+  accessToken: string,
+  instanceId: string
+) =>
+  fetchJson<{ success: boolean }>(apiBaseUrl, `/api/instances/${instanceId}/logout`, {
+    method: 'POST'
+  }, accessToken);
 
 export const deleteBackendInstance = (
   apiBaseUrl: string,

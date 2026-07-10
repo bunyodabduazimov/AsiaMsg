@@ -111,13 +111,20 @@ export class InstanceService {
 
   async connect(userId: string, instanceId: string) {
     const instance = await this.getById(userId, instanceId);
+    const hasSavedSession = Boolean(instance.session);
+
     if (baileysManager.isRunning(instanceId)) {
-      await baileysManager.disconnect(instanceId);
+      await baileysManager.disconnect(instanceId, false); // Internal cleanup, not user-initiated
     }
 
     await this.repository.updateStatus(instanceId, 'CONNECTING', null);
     await baileysManager.connect(instance);
-    await baileysManager.waitForQr(instanceId, 60000);
+
+    const connected = await baileysManager.waitForConnected(instanceId, hasSavedSession ? 15000 : 5000);
+    if (!connected) {
+      await baileysManager.waitForQr(instanceId, 60000);
+    }
+
     const updated = await this.repository.findByIdAndUser(instanceId, userId);
     if (!updated) {
       throw new AppError('Instance not found', 404);
@@ -130,8 +137,8 @@ export class InstanceService {
 
   async disconnect(userId: string, instanceId: string) {
     await this.getById(userId, instanceId);
-    await baileysManager.disconnect(instanceId);
-    return this.repository.updateStatus(instanceId, 'DISCONNECTED');
+    await baileysManager.disconnect(instanceId, true); // User-initiated disconnect
+    return this.repository.updateStatus(instanceId, 'DISCONNECTED', null);
   }
 
   async delete(userId: string, instanceId: string) {
@@ -183,7 +190,7 @@ export class InstanceService {
     const instance = await this.getById(userId, instanceId);
     if (instance.status !== 'CONNECTED') {
       if (baileysManager.isRunning(instanceId)) {
-        await baileysManager.disconnect(instanceId);
+        await baileysManager.disconnect(instanceId, false);
       }
 
       await this.repository.deleteSession(instanceId);
@@ -264,7 +271,7 @@ export class InstanceService {
 
   async restart(userId: string, instanceId: string) {
     const instance = await this.getById(userId, instanceId);
-    await baileysManager.disconnect(instance.id);
+    await baileysManager.disconnect(instance.id, false);
     await this.repository.updateStatus(instanceId, 'CONNECTING', null);
     await baileysManager.connect(instance, { resetAuth: false });
     await this.repository.createLog(instanceId, 'info', 'Instance restarted');
