@@ -1,19 +1,19 @@
 services:
   mysql:
     image: mysql:8.3
-    container_name: asiamsg-mysql
+    container_name: chatapi-mysql
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: asiamsg
+      MYSQL_DATABASE: chatapi
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     ports:
       - "3306:3306"
     volumes:
-      - asiamsg-mysql-data:/var/lib/mysql
+      - chatapi-mysql-data:/var/lib/mysql
 
   redis:
     image: redis:7-alpine
-    container_name: asiamsg-redis
+    container_name: chatapi-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:

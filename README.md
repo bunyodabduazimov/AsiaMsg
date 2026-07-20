@@ -1,4 +1,4 @@
-# AsiaMsg
+# ChatAPI
 
 Платформа для управления WhatsApp-инстансами через Baileys.
 
