@@ -1,5 +1,5 @@
 # AsiaMsg instructions
-
+git clone https://github.com/bunyodabduazimov/AsiaMsg.git 
 Работай быстро и точечно.
 
 Не анализируй весь проект без необходимости.
