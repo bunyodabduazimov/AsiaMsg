@@ -1,8 +1,7 @@
-import path from 'node:path';
-import { mkdir, rm } from 'node:fs/promises';
 import pino from 'pino';
 import QRCode from 'qrcode';
 import type { InstanceStatus, Prisma } from '@prisma/client';
+import type { AuthenticationCreds, AuthenticationState, SignalDataSet } from '@whiskeysockets/baileys';
 import { prisma } from '../../database';
 import { InstanceRepository } from '../../instances/instance.repository';
 import type { InstanceView } from '../../instances/instance.types';
@@ -45,11 +44,32 @@ type ConnectionWaiter = {
 
 type ConnectOptions = {
   resetAuth?: boolean;
+  suppressReconnect?: boolean;
 };
+
+type DisconnectOptions = {
+  isUserInitiated?: boolean;
+  suppressReconnect?: boolean;
+};
+
+type PersistedAuthState = {
+  creds: AuthenticationCreds;
+  keys: Record<string, Record<string, unknown>>;
+};
+
+const nativeImport = (specifier: string) => Function('specifier', 'return import(specifier)')(specifier) as Promise<{
+  default: typeof import('@whiskeysockets/baileys').default;
+  DisconnectReason: typeof import('@whiskeysockets/baileys').DisconnectReason;
+  fetchLatestBaileysVersion: typeof import('@whiskeysockets/baileys').fetchLatestBaileysVersion;
+  BufferJSON: typeof import('@whiskeysockets/baileys').BufferJSON;
+  initAuthCreds: typeof import('@whiskeysockets/baileys').initAuthCreds;
+  proto: typeof import('@whiskeysockets/baileys').proto;
+}>;
 
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
   private readonly manualDisconnects = new Set<string>();
+  private readonly reconnectSuppressed = new Set<string>();
   private readonly qrWaiters = new Map<string, QrWaiter[]>();
   private readonly connectionWaiters = new Map<string, ConnectionWaiter[]>();
   private readonly repository = new InstanceRepository();
@@ -60,20 +80,13 @@ export class BaileysManager {
     }
 
     const {
-      Browsers,
       default: makeWASocket,
       DisconnectReason,
-      fetchLatestBaileysVersion,
-      useMultiFileAuthState
-    } = await import('@whiskeysockets/baileys');
+      fetchLatestBaileysVersion
+    } = await nativeImport('@whiskeysockets/baileys');
 
-    const authPath = this.getAuthPath(instance.id);
     const shouldResetAuth = options.resetAuth ?? !instance.session;
-    if (shouldResetAuth) {
-      await rm(authPath, { recursive: true, force: true });
-    }
-    await mkdir(authPath, { recursive: true });
-    const { state, saveCreds } = await useMultiFileAuthState(authPath);
+    const { state, saveCreds } = await this.createDatabaseAuthState(instance.id, shouldResetAuth);
     const { version } = await fetchLatestBaileysVersion();
     const socket = makeWASocket({
       auth: state,
@@ -85,7 +98,7 @@ export class BaileysManager {
       syncFullHistory: true,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      browser: Browsers.ubuntu('AsiaMsg')
+      browser: ['ChatAPI', 'Ubuntu', '1.0.0']
     });
 
     const managed: ManagedInstance = {
@@ -101,7 +114,6 @@ export class BaileysManager {
 
     socket.ev.on('creds.update', async () => {
       await saveCreds();
-      await this.repository.upsertSession(instance.id, state.creds as unknown as Prisma.InputJsonValue);
     });
 
     socket.ev.on('chats.upsert', (newChats: any[]) => {
@@ -250,11 +262,21 @@ export class BaileysManager {
       if (update.connection === 'close') {
         const statusCode = (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
         const wasManuallyDisconnected = this.manualDisconnects.has(instance.id);
+        const reconnectWasSuppressed = this.reconnectSuppressed.has(instance.id);
+
         if (wasManuallyDisconnected) {
           this.manualDisconnects.delete(instance.id);
         }
+        if (reconnectWasSuppressed) {
+          this.reconnectSuppressed.delete(instance.id);
+        }
 
-        const shouldReconnect = !wasManuallyDisconnected && statusCode !== DisconnectReason.loggedOut;
+        const autoReconnectEnabled = instance.settings?.autoReconnect !== false;
+        const shouldReconnect =
+          autoReconnectEnabled &&
+          !wasManuallyDisconnected &&
+          !reconnectWasSuppressed &&
+          statusCode !== DisconnectReason.loggedOut;
         const nextStatus = managed.qrCode ? 'WAITING_QR' : 'DISCONNECTED';
 
         this.instances.delete(instance.id);
@@ -297,14 +319,17 @@ export class BaileysManager {
     return managed;
   }
 
-  async disconnect(instanceId: string, isUserInitiated: boolean = false) {
+  async disconnect(instanceId: string, options: DisconnectOptions = {}) {
     const managed = this.instances.get(instanceId);
     if (!managed) {
       return;
     }
 
-    if (isUserInitiated) {
+    if (options.isUserInitiated) {
       this.manualDisconnects.add(instanceId);
+    }
+    if (options.suppressReconnect) {
+      this.reconnectSuppressed.add(instanceId);
     }
 
     managed.socket.end(undefined);
@@ -314,8 +339,7 @@ export class BaileysManager {
   }
 
   async remove(instanceId: string) {
-    await this.disconnect(instanceId);
-    await rm(this.getAuthPath(instanceId), { recursive: true, force: true });
+    await this.disconnect(instanceId, { suppressReconnect: true });
   }
 
   isRunning(instanceId: string) {
@@ -453,6 +477,96 @@ export class BaileysManager {
     }
   }
 
+  private async createDatabaseAuthState(instanceId: string, resetAuth: boolean) {
+    const baileys = await nativeImport('@whiskeysockets/baileys');
+    const BufferJSON = baileys.BufferJSON;
+    const initAuthCreds = baileys.initAuthCreds;
+    const proto = baileys.proto;
+
+    let persistedState: PersistedAuthState;
+
+    if (resetAuth) {
+      await this.repository.deleteSession(instanceId);
+      persistedState = {
+        creds: initAuthCreds(),
+        keys: {}
+      };
+    } else {
+      const session = await prisma.instanceSession.findUnique({
+        where: { instanceId }
+      });
+
+      if (!session?.authState) {
+        persistedState = {
+          creds: initAuthCreds(),
+          keys: {}
+        };
+      } else {
+        const revived = JSON.parse(JSON.stringify(session.authState), BufferJSON.reviver) as Partial<PersistedAuthState>;
+        persistedState = {
+          creds: (revived.creds ?? initAuthCreds()) as AuthenticationCreds,
+          keys: (revived.keys ?? {}) as Record<string, Record<string, unknown>>
+        };
+      }
+    }
+
+    const saveState = async () => {
+      await this.repository.upsertSession(instanceId, JSON.parse(JSON.stringify(persistedState, BufferJSON.replacer)) as Prisma.InputJsonValue);
+    };
+
+    const state: AuthenticationState = {
+      creds: persistedState.creds,
+      keys: {
+        get: async (type: string, ids: string[]) => {
+          const result: Record<string, any> = {};
+
+          for (const id of ids) {
+            let data: unknown = persistedState.keys[`${type}-${id}`];
+
+            if (type === 'app-state-sync-key' && data) {
+              data = proto.Message.AppStateSyncKeyData.fromObject(data as Record<string, unknown>);
+            }
+
+            result[id] = data ?? null;
+          }
+
+          return result;
+        },
+        set: async (newData: SignalDataSet) => {
+          let changed = false;
+
+          for (const category of Object.keys(newData)) {
+            const bucket = newData[category as keyof SignalDataSet] ?? {};
+            for (const id of Object.keys(bucket)) {
+              const value = bucket[id as keyof typeof bucket];
+              const key = `${category}-${id}`;
+
+              if (value) {
+                persistedState.keys[key] = value as Record<string, unknown>;
+              } else {
+                delete persistedState.keys[key];
+              }
+
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            await saveState();
+          }
+        }
+      }
+    };
+
+    const saveCreds = async () => {
+      await saveState();
+    };
+
+    await saveState();
+
+    return { state, saveCreds };
+  }
+
   private async handleMessagesUpsert(instance: InstanceView, upsert: any) {
     const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
     if (!messages.length) return;
@@ -567,10 +681,6 @@ export class BaileysManager {
         });
       }
     }
-  }
-
-  private getAuthPath(instanceId: string) {
-    return path.join(process.cwd(), 'storage', 'wa', instanceId);
   }
 
   private normalizeTimestamp(value: unknown) {

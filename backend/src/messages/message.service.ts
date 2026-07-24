@@ -36,53 +36,29 @@ type StoredMessageRequest = {
 };
 
 export class MessageService {
+  private readonly outboundQueue: Array<{
+    messageRecordId: string;
+    userId: string;
+    instanceId: string;
+    input: CreateMessageInput;
+  }> = [];
+
+  private processingOutboundQueue = false;
+
   async create(userId: string, input: CreateMessageInput) {
     const instance = await this.getInstanceByIdOrThrow(userId, input.instanceId);
     await this.ensureWhatsAppConnected(instance);
-    const attachment = input.attachment ?? null;
-
-    const sentMessage = await this.sendByType(instance.id, input);
-
-    const messageId = sentMessage?.key?.id || sentMessage?.messageId || `msg-${Date.now()}`;
-    const whatsappRemoteJid = sentMessage?.key?.remoteJid || this.normalizeRemoteJid(input.remoteJid);
-    const whatsappTimestamp = this.parseWhatsAppTimestamp(sentMessage?.messageTimestamp);
-    const payload: Prisma.InputJsonValue = {
-      request: {
-        text: input.messageText ?? null,
-        type: input.messageType,
-        imageUrl: input.imageUrl ?? null,
-        documentUrl: input.documentUrl ?? null,
-        audioUrl: input.audioUrl ?? null,
-        voiceUrl: input.voiceUrl ?? null,
-        videoUrl: input.videoUrl ?? null,
-        stickerUrl: input.stickerUrl ?? null,
-        fileName: input.fileName ?? null,
-        phoneNumber: input.phoneNumber ?? null,
-        name: input.name ?? null,
-        latitude: input.latitude ?? null,
-        longitude: input.longitude ?? null,
-        vcard: input.vcard ?? null,
-        attachment: attachment
-          ? {
-              name: attachment.name,
-              type: attachment.type,
-              size: attachment.size,
-              dataBase64: attachment.dataBase64 ?? null
-            }
-          : null
-      },
-      whatsappResponse: this.serializeWhatsAppResponse(sentMessage)
-    };
+    const payload = this.buildQueuedPayload(input);
 
     const createdMessage = await prisma.message.create({
       data: {
         instanceId: instance.id,
         direction: 'outbound',
-        remoteJid: whatsappRemoteJid,
-        messageId,
+        remoteJid: this.normalizeRemoteJid(input.remoteJid),
+        messageId: null,
         payload,
-        status: 'sent',
-        sentAt: whatsappTimestamp ?? new Date()
+        status: 'queued',
+        sentAt: null
       },
       include: {
         instance: {
@@ -94,9 +70,11 @@ export class MessageService {
       }
     });
 
-    await webhookDispatcher.dispatchMessageCreate({
-      message: createdMessage,
-      settings: instance.settings
+    this.enqueueOutboundMessage({
+      messageRecordId: createdMessage.id,
+      userId,
+      instanceId: instance.id,
+      input
     });
 
     return createdMessage;
@@ -135,8 +113,9 @@ export class MessageService {
   async statistics(userId: string, instanceId: string) {
     const instance = await this.getInstanceByIdOrThrow(userId, instanceId);
 
-    const [total, sent, failed, outbound, inbound] = await Promise.all([
+    const [total, queued, sent, failed, outbound, inbound] = await Promise.all([
       prisma.message.count({ where: { instanceId: instance.id } }),
+      prisma.message.count({ where: { instanceId: instance.id, status: 'queued' } }),
       prisma.message.count({ where: { instanceId: instance.id, status: 'sent' } }),
       prisma.message.count({ where: { instanceId: instance.id, status: 'failed' } }),
       prisma.message.count({ where: { instanceId: instance.id, direction: 'outbound' } }),
@@ -147,6 +126,7 @@ export class MessageService {
       success: true,
       data: {
         total,
+        queued,
         sent,
         failed,
         outbound,
@@ -400,6 +380,149 @@ export class MessageService {
     });
   }
 
+  private enqueueOutboundMessage(job: {
+    messageRecordId: string;
+    userId: string;
+    instanceId: string;
+    input: CreateMessageInput;
+  }) {
+    this.outboundQueue.push(job);
+    void this.processOutboundQueue();
+  }
+
+  private async processOutboundQueue() {
+    if (this.processingOutboundQueue) {
+      return;
+    }
+
+    this.processingOutboundQueue = true;
+
+    try {
+      while (this.outboundQueue.length > 0) {
+        const job = this.outboundQueue.shift();
+        if (!job) {
+          continue;
+        }
+
+        await this.processOutboundJob(job);
+      }
+    } finally {
+      this.processingOutboundQueue = false;
+    }
+  }
+
+  private async processOutboundJob(job: {
+    messageRecordId: string;
+    userId: string;
+    instanceId: string;
+    input: CreateMessageInput;
+  }) {
+    try {
+      const instance = await this.getInstanceByIdOrThrow(job.userId, job.instanceId);
+      await this.ensureWhatsAppConnected(instance);
+
+      const sentMessage = await this.sendByType(instance.id, job.input);
+      const messageId = sentMessage?.key?.id || sentMessage?.messageId || `msg-${Date.now()}`;
+      const whatsappRemoteJid = sentMessage?.key?.remoteJid || this.normalizeRemoteJid(job.input.remoteJid);
+      const whatsappTimestamp = this.parseWhatsAppTimestamp(sentMessage?.messageTimestamp);
+
+      const payload: Prisma.InputJsonValue = this.buildQueuedPayload(job.input, sentMessage);
+
+      const updatedMessage = await prisma.message.update({
+        where: { id: job.messageRecordId },
+        data: {
+          remoteJid: whatsappRemoteJid,
+          messageId,
+          payload,
+          status: 'sent',
+          sentAt: whatsappTimestamp ?? new Date()
+        },
+        include: {
+          instance: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      });
+
+      await webhookDispatcher.dispatchMessageCreate({
+        message: updatedMessage,
+        settings: instance.settings
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      await prisma.message.update({
+        where: { id: job.messageRecordId },
+        data: {
+          status: 'failed',
+          payload: {
+            request: this.buildRequestPayload(job.input),
+            error: message
+          } as Prisma.InputJsonValue
+        }
+      });
+      await this.logQueueFailure(job.instanceId, message);
+    }
+  }
+
+  private buildQueuedPayload(input: CreateMessageInput, whatsappResponse?: unknown): Prisma.InputJsonValue {
+    const payload: Record<string, unknown> = {
+      request: this.buildRequestPayload(input)
+    };
+
+    if (typeof whatsappResponse !== 'undefined') {
+      payload.whatsappResponse = this.serializeWhatsAppResponse(whatsappResponse);
+    }
+
+    return payload as Prisma.InputJsonValue;
+  }
+
+  private buildRequestPayload(input: CreateMessageInput) {
+    const attachment = input.attachment ?? null;
+
+    return {
+      text: input.messageText ?? null,
+      type: input.messageType,
+      imageUrl: input.imageUrl ?? null,
+      documentUrl: input.documentUrl ?? null,
+      audioUrl: input.audioUrl ?? null,
+      voiceUrl: input.voiceUrl ?? null,
+      videoUrl: input.videoUrl ?? null,
+      stickerUrl: input.stickerUrl ?? null,
+      fileName: input.fileName ?? null,
+      phoneNumber: input.phoneNumber ?? null,
+      name: input.name ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      vcard: input.vcard ?? null,
+      attachment: attachment
+        ? {
+            name: attachment.name,
+            type: attachment.type,
+            size: attachment.size,
+            dataBase64: attachment.dataBase64 ?? null
+          }
+        : null
+    };
+  }
+
+  private async logQueueFailure(instanceId: string, message: string) {
+    try {
+      await prisma.instanceLog.create({
+        data: {
+          instance: { connect: { id: instanceId } },
+          level: 'error',
+          message: 'Failed to process outbound message queue item',
+          meta: { message } as Prisma.InputJsonValue
+        }
+      });
+    } catch {
+      // Ignore logging failures so the queue keeps moving.
+    }
+  }
+
   private buildCreateInputFromStoredMessage(instanceId: string, remoteJid: string, payload: Prisma.JsonValue): CreateMessageInput {
     const request = this.extractStoredRequest(payload);
 
@@ -479,7 +602,7 @@ export class MessageService {
     }
 
     if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED' && canRestoreSession) {
-      await baileysManager.disconnect(instance.id);
+      await baileysManager.disconnect(instance.id, { suppressReconnect: true });
       await baileysManager.connect(instance, { resetAuth: false });
       await baileysManager.waitForConnected(instance.id, 60000);
     }

@@ -102,7 +102,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
       return (
         item.name.toLowerCase().includes(query) ||
         item.number.toLowerCase().includes(query) ||
-        item.provider.toLowerCase().includes(query) ||
+        
         item.status.toLowerCase().includes(query)
       );
     });
@@ -672,7 +672,6 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-500">
                 <th className="px-5 py-4">{isRu ? 'Название' : 'Name'}</th>
                 <th className="px-5 py-4">{isRu ? 'Номер' : 'Number'}</th>
-                <th className="px-5 py-4">{isRu ? 'Провайдер' : 'Provider'}</th>
                 <th className="px-5 py-4">{isRu ? 'Статус' : 'Status'}</th>
                 <th className="px-5 py-4">{isRu ? 'Активность' : 'Activity'}</th>
                 <th className="px-5 py-4 text-center">{isRu ? 'Сообщений' : 'Messages'}</th>
@@ -682,7 +681,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {paginatedInstances.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-sm text-slate-400">
+                  <td colSpan={6} className="px-5 py-16 text-center text-sm text-slate-400">
                     {isRu ? 'Ничего не найдено' : 'No instances found'}
                   </td>
                 </tr>
@@ -699,13 +698,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                       {item.name}
                     </td>
                     <td className="px-5 py-5 font-mono text-slate-500 dark:text-slate-400">{item.number}</td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
-                        {item.provider}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-5">
                       <StatusBadge status={item.status} size="sm" />
                     </td>
                     <td className="px-5 py-5 text-slate-500 dark:text-slate-400">{item.lastActive}</td>
@@ -1073,3 +1066,5 @@ const WebhookToggle: React.FC<WebhookToggleProps> = ({ label, checked, onChange 
     </span>
   </button>
 );
+
+

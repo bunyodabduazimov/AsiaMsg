@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  KeyRound,
-  Plus,
-  Smartphone
-} from 'lucide-react';
+import { Plus, Smartphone } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { changeLanguage } from './i18n';
 import { OverviewView } from './components/views/OverviewView';
@@ -56,12 +52,6 @@ import {
 } from './lib/api';
 
 type BackendConnectionStatus = 'idle' | 'loading' | 'connected' | 'error';
-
-type CreatedApiKey = {
-  instanceId: string;
-  apiKey: string;
-  apiKeyPreview: string;
-};
 
 const INSTANCE_API_KEYS_STORAGE_KEY = 'chatapi.instanceApiKeys';
 
@@ -188,10 +178,7 @@ export default function App() {
   const [refreshToken, setRefreshToken] = useState<string | null>(storedConnection.refreshToken);
   const [showAddNumberModal, setShowAddNumberModal] = useState(false);
   const [newNumName, setNewNumName] = useState('');
-  const [newNumProvider, setNewNumProvider] = useState('Baileys');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
   const [instanceApiKeys, setInstanceApiKeys] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {};
 
@@ -204,7 +191,6 @@ export default function App() {
       return {};
     }
   });
-  const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(
     !storedConnection.accessToken
   );
@@ -672,18 +658,6 @@ export default function App() {
         name: newNumName.trim()
       });
       
-      // Check if API key was created
-      const storedApiKey = sessionStorage.getItem('createdInstanceApiKey');
-      if (storedApiKey) {
-        const apiKeyData = JSON.parse(storedApiKey);
-        setCreatedApiKey(apiKeyData);
-        setInstanceApiKeys(prev => ({
-          ...prev,
-          [apiKeyData.instanceId]: apiKeyData.apiKey
-        }));
-        setShowApiKeyModal(true);
-        sessionStorage.removeItem('createdInstanceApiKey');
-      }
 
       const connected = await connectBackendInstance(apiBaseUrl, accessToken, created.id);
 
@@ -695,7 +669,7 @@ export default function App() {
       setShowAddNumberModal(false);
       setNewNumName('');
       handleViewChange('instances');
-      triggerToast(state.language === 'RU' ? 'Инстанс создан. API ключ сохранён в БД' : 'Instance created. API key saved to DB');
+      triggerToast(state.language === 'RU' ? '������� ������.' : 'Instance created.');
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
@@ -1249,18 +1223,6 @@ export default function App() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase text-slate-400">Провайдер авторизации</label>
-                <select
-                  value={newNumProvider}
-                  onChange={(e) => setNewNumProvider(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="Baileys">Baileys (Web Multi-Device)</option>
-                  <option value="Official">Official (WhatsApp Business Cloud API)</option>
-                </select>
-              </div>
-
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -1280,92 +1242,6 @@ export default function App() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showApiKeyModal && createdApiKey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]">
-          <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center gap-2.5 border-b border-slate-100 pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                <KeyRound className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">API ключ создан</h3>
-                <p className="mt-0.5 text-[10px] text-slate-400">Сохраните ключ в безопасном месте</p>
-              </div>
-            </div>
-
-            <div className="mb-6 space-y-4">
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase text-slate-400">Instance ID</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={createdApiKey.instanceId}
-                    className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-700"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(createdApiKey.instanceId);
-                      setApiKeyCopied(true);
-                      setTimeout(() => setApiKeyCopied(false), 2000);
-                    }}
-                    className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                  >
-                    {apiKeyCopied ? '✓' : 'Скопировать'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase text-slate-400">API Ключ (только сейчас)</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={createdApiKey.apiKey}
-                    className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-mono text-amber-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(createdApiKey.apiKey);
-                      setApiKeyCopied(true);
-                      setTimeout(() => setApiKeyCopied(false), 2000);
-                    }}
-                    className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-200"
-                  >
-                    {apiKeyCopied ? '✓' : 'Скопировать'}
-                  </button>
-                </div>
-                <p className="text-[10px] text-amber-700">⚠️ Сохраните ключ - он больше не будет показан!</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase text-slate-400">Использование</label>
-                <pre className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[10px] overflow-auto max-h-24 text-slate-700">
-{`curl -X POST http://localhost:4000/api/messages/text \\
-  -H "X-API-Key: ${createdApiKey.apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"instanceId":"${createdApiKey.instanceId}","remoteJid":"+992922772244","messageText":"Hello"}'`}
-                </pre>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowApiKeyModal(false);
-                setCreatedApiKey(null);
-              }}
-              className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              Понял, ключ сохранён
-            </button>
           </div>
         </div>
       )}

@@ -114,7 +114,7 @@ export class InstanceService {
     const hasSavedSession = Boolean(instance.session);
 
     if (baileysManager.isRunning(instanceId)) {
-      await baileysManager.disconnect(instanceId, false); // Internal cleanup, not user-initiated
+      await baileysManager.disconnect(instanceId, { suppressReconnect: true }); // Internal cleanup, not user-initiated
     }
 
     await this.repository.updateStatus(instanceId, 'CONNECTING', null);
@@ -137,7 +137,7 @@ export class InstanceService {
 
   async disconnect(userId: string, instanceId: string) {
     await this.getById(userId, instanceId);
-    await baileysManager.disconnect(instanceId, true); // User-initiated disconnect
+    await baileysManager.disconnect(instanceId, { isUserInitiated: true }); // User-initiated disconnect
     return this.repository.updateStatus(instanceId, 'DISCONNECTED', null);
   }
 
@@ -190,7 +190,7 @@ export class InstanceService {
     const instance = await this.getById(userId, instanceId);
     if (instance.status !== 'CONNECTED') {
       if (baileysManager.isRunning(instanceId)) {
-        await baileysManager.disconnect(instanceId, false);
+        await baileysManager.disconnect(instanceId, { suppressReconnect: true });
       }
 
       await this.repository.deleteSession(instanceId);
@@ -271,7 +271,7 @@ export class InstanceService {
 
   async restart(userId: string, instanceId: string) {
     const instance = await this.getById(userId, instanceId);
-    await baileysManager.disconnect(instance.id, false);
+    await baileysManager.disconnect(instance.id, { suppressReconnect: true });
     await this.repository.updateStatus(instanceId, 'CONNECTING', null);
     await baileysManager.connect(instance, { resetAuth: false });
     await this.repository.createLog(instanceId, 'info', 'Instance restarted');
