@@ -243,13 +243,13 @@ export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = 
   const [responseBodyJson, setResponseBodyJson] = useState<string | null>(null);
   const [requestSending, setRequestSending] = useState(false);
 
-  // Get API key for currently selected instance
   const currentApiKey = useMemo(() => {
-    if (instanceId && instanceApiKeys[instanceId]) {
-      return instanceApiKeys[instanceId];
+    if (!instanceId) {
+      return null;
     }
-    return apiKey;
-  }, [instanceId, instanceApiKeys, apiKey]);
+
+    return instanceApiKeys[instanceId] ?? state.instances.find(instance => instance.id === instanceId)?.apiKey ?? null;
+  }, [instanceId, instanceApiKeys, state.instances]);
 
   const selectedInstance = useMemo(() => {
     if (state.selectedInstanceId) {
@@ -680,4 +680,3 @@ export const ApiDocsPage: React.FC<Props> = ({ state, apiKey, instanceApiKeys = 
     </div>
   );
 };
-

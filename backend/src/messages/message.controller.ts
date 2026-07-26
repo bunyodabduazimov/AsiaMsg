@@ -55,6 +55,16 @@ export const listMessages = asyncHandler(async (req: Request, res: Response) => 
   res.json(item);
 });
 
+export const listAllMessages = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const item = await messageService.listAll(req.authUser.id);
+  res.json(item);
+});
+
 export const getMessageStatistics = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) {
     res.status(401).json({ message: 'Unauthorized' });

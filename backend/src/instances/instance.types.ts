@@ -2,9 +2,11 @@ import type { Instance, InstanceSetting, InstanceSession, InstanceStatus } from 
 import type { updateInstanceSettingsSchema } from './instance.schemas';
 import type { z } from 'zod';
 
-export type InstanceView = Instance & {
+export type InstanceView = Omit<Instance, 'apiKeyEncrypted'> & {
   session: InstanceSession | null;
   settings: InstanceSetting | null;
+  apiKeyEncrypted?: string | null;
+  apiKey?: string | null;
 };
 
 export type CreateInstanceInput = {

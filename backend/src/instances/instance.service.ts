@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
+import { prisma } from '../database';
 import { AppError } from '../middleware/error-handler';
 import { hashToken } from '../utils/jwt';
+import { decryptApiKey, encryptApiKey } from '../utils/api-key-crypto';
 import { baileysManager } from '../providers/whatsapp/baileys.manager';
 import { webhookDispatcher } from '../webhooks/webhook.dispatcher';
 import { InstanceRepository } from './instance.repository';
@@ -17,6 +19,25 @@ export class InstanceService {
 
   async list(userId: string) {
     const instances = await this.repository.listByUser(userId);
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const messagesTodayByInstance = await prisma.message.groupBy({
+      by: ['instanceId'],
+      where: {
+        instance: {
+          userId
+        },
+        createdAt: {
+          gte: startOfDay
+        }
+      },
+      _count: {
+        instanceId: true
+      }
+    });
+
+    const messagesTodayMap = new Map(messagesTodayByInstance.map(item => [item.instanceId, item._count.instanceId]));
 
     return Promise.all(instances.map(async instance => {
       const hasSavedSession = Boolean(instance.session);
@@ -36,11 +57,17 @@ export class InstanceService {
         return this.repository.updateStatus(instance.id, 'DISCONNECTED', null);
       }
 
-      if (instance.status === 'CONNECTED' && !hasRuntimeSession && hasSavedSession) {
-        return this.repository.updateStatus(instance.id, 'RECONNECTING', instance.qrCode);
-      }
+      const displayInstance =
+        !hasRuntimeSession && hasSavedSession && instance.status === 'CONNECTED'
+          ? await this.repository.updateStatus(instance.id, 'RECONNECTING', instance.qrCode)
+          : instance;
 
-      return instance;
+      const { apiKeyEncrypted, ...safeInstance } = displayInstance as typeof displayInstance & { apiKeyEncrypted?: string | null };
+      return {
+        ...safeInstance,
+        apiKey: decryptApiKey(apiKeyEncrypted ?? null),
+        messagesToday: messagesTodayMap.get(displayInstance.id) ?? 0
+      };
     }));
   }
 
@@ -53,17 +80,16 @@ export class InstanceService {
     // Auto-generate API key on instance creation
     const apiKey = this.createApiKeyValue(instance.id);
     const apiKeyHash = hashToken(apiKey);
-    const apiKeyPreview = `${apiKey.slice(0, 14)}...`;
+    const apiKeyEncrypted = encryptApiKey(apiKey);
 
-    await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyPreview);
+    await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyEncrypted);
     await this.repository.createLog(instance.id, 'info', 'WhatsApp instance created. Waiting for QR scan.');
-    await this.repository.createLog(instance.id, 'info', `API key auto-generated: ${apiKeyPreview}`);
+    await this.repository.createLog(instance.id, 'info', 'API key auto-generated');
 
     // Return instance with full API key (only shown once at creation)
     return {
       instance,
       apiKey,
-      apiKeyPreview,
       message: 'Instance created. Save API key - it will not be shown again!'
     };
   }
@@ -73,14 +99,28 @@ export class InstanceService {
     if (!instance) {
       throw new AppError('Instance not found', 404);
     }
+    let resolvedInstance = instance;
     if (
       !baileysManager.isRunning(instance.id) &&
       !instance.session &&
       ['CONNECTED', 'CONNECTING', 'RECONNECTING'].includes(instance.status)
     ) {
-      return this.repository.updateStatus(instance.id, 'DISCONNECTED', null);
+      resolvedInstance = await this.repository.updateStatus(instance.id, 'DISCONNECTED', null);
     }
-    return instance;
+
+    if (
+      !baileysManager.isRunning(instance.id) &&
+      instance.session &&
+      instance.status === 'CONNECTED'
+    ) {
+      resolvedInstance = await this.repository.updateStatus(instance.id, 'RECONNECTING', instance.qrCode);
+    }
+
+    const { apiKeyEncrypted, ...safeInstance } = resolvedInstance as typeof resolvedInstance & { apiKeyEncrypted?: string | null };
+    return {
+      ...safeInstance,
+      apiKey: decryptApiKey(apiKeyEncrypted ?? null)
+    };
   }
 
   async update(userId: string, instanceId: string, input: UpdateInstanceInput) {
@@ -188,21 +228,20 @@ export class InstanceService {
 
   async getQr(userId: string, instanceId: string) {
     const instance = await this.getById(userId, instanceId);
-    if (instance.status !== 'CONNECTED') {
-      if (baileysManager.isRunning(instanceId)) {
-        await baileysManager.disconnect(instanceId, { suppressReconnect: true });
-      }
-
-      await this.repository.deleteSession(instanceId);
-      await this.repository.updateStatus(instanceId, 'CONNECTING', null);
-      await baileysManager.connect({ ...instance, session: null });
-      await baileysManager.waitForQr(instanceId, 60000);
+    if (baileysManager.isRunning(instanceId)) {
+      await baileysManager.disconnect(instanceId, { suppressReconnect: true });
     }
+
+    await this.repository.deleteSession(instanceId);
+    await this.repository.updateStatus(instanceId, 'CONNECTING', null);
+    await baileysManager.connect({ ...instance, session: null }, { resetAuth: true, suppressReconnect: true });
+    const qrCode = await baileysManager.waitForQr(instanceId, 60000);
+
     const updated = await this.repository.findByIdAndUser(instanceId, userId);
     if (!updated) {
       throw new AppError('Instance not found', 404);
     }
-    if (updated.status === 'DISCONNECTED' && !updated.qrCode) {
+    if (!qrCode && !updated.qrCode) {
       throw new AppError('WhatsApp QR was not generated. Baileys disconnected before receiving QR refs. Check instance logs for statusCode.', 502);
     }
     return updated;
@@ -295,7 +334,7 @@ export class InstanceService {
       data: {
         instanceId: instance.id,
         hasApiKey: Boolean(instance.apiKeyHash),
-        apiKeyPreview: instance.apiKeyPreview ?? null,
+        apiKey: instance.apiKey ?? null,
         apiKeyCreatedAt: instance.apiKeyCreatedAt ?? null,
         apiKeyLastUsedAt: instance.apiKeyLastUsedAt ?? null
       }
@@ -306,9 +345,9 @@ export class InstanceService {
     const instance = await this.getById(userId, instanceId);
     const apiKey = this.createApiKeyValue(instance.id);
     const apiKeyHash = hashToken(apiKey);
-    const apiKeyPreview = `${apiKey.slice(0, 14)}...`;
+    const apiKeyEncrypted = encryptApiKey(apiKey);
 
-    const updatedInstance = await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyPreview);
+    const updatedInstance = await this.repository.setApiKey(instance.id, apiKeyHash, apiKeyEncrypted);
     await this.repository.createLog(instance.id, 'info', 'Instance API key regenerated');
 
     return {
@@ -316,7 +355,6 @@ export class InstanceService {
       data: {
         instanceId: updatedInstance.id,
         apiKey,
-        apiKeyPreview: updatedInstance.apiKeyPreview,
         apiKeyCreatedAt: updatedInstance.apiKeyCreatedAt
       }
     };

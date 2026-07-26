@@ -29,6 +29,8 @@ import {
   buildWebhookItems,
   fetchBackendInstance,
   fetchBackendInstanceQr,
+  fetchAllMessages,
+  fetchInstances,
   fetchDashboard,
   getDefaultApiBaseUrl,
   loginToBackend,
@@ -52,8 +54,6 @@ import {
 } from './lib/api';
 
 type BackendConnectionStatus = 'idle' | 'loading' | 'connected' | 'error';
-
-const INSTANCE_API_KEYS_STORAGE_KEY = 'chatapi.instanceApiKeys';
 
 const viewRoutes: Record<ActiveView, string> = {
   overview: '/overview',
@@ -150,7 +150,7 @@ const createEmptyAppState = (): AppState => ({
   notificationCount: 0
 });
 
-export default function App() {
+export function App() {
   const storedConnection = readStoredConnection();
   const [state, setState] = useState<AppState>(() => ({
     ...createEmptyAppState(),
@@ -179,23 +179,12 @@ export default function App() {
   const [showAddNumberModal, setShowAddNumberModal] = useState(false);
   const [newNumName, setNewNumName] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [instanceApiKeys, setInstanceApiKeys] = useState<Record<string, string>>(() => {
-    if (typeof window === 'undefined') return {};
-
-    try {
-      const raw = window.sessionStorage.getItem(INSTANCE_API_KEYS_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, string>;
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
-    }
-  });
+  const [instanceApiKeys, setInstanceApiKeys] = useState<Record<string, string>>({});
   const [showAuthModal, setShowAuthModal] = useState(
     !storedConnection.accessToken
   );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [lastConnectedToastInstanceId, setLastConnectedToastInstanceId] = useState<string | null>(null);
+  const selectedInstance = state.instances.find(item => item.id === state.selectedInstanceId) ?? null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -211,11 +200,6 @@ export default function App() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(THEME_STATE_KEY, state.theme);
   }, [state.theme]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(INSTANCE_API_KEYS_STORAGE_KEY, JSON.stringify(instanceApiKeys));
-  }, [instanceApiKeys]);
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -287,47 +271,78 @@ export default function App() {
     setBackendStatus('loading');
     setBackendError(null);
 
+    const loadDashboard = async () => {
+      const dashboard = await fetchDashboard(apiBaseUrl, accessToken);
+      const messagesByInstance = new Map<string, number>();
+      for (const message of dashboard.messages) {
+        messagesByInstance.set(message.instanceId, (messagesByInstance.get(message.instanceId) || 0) + 1);
+      }
+      const instances = dashboard.instances.map(mapBackendInstanceToUi);
+      const messages = dashboard.messages.map(mapBackendMessageToUi);
+      const tokens = dashboard.tokens.map(mapBackendTokenToUi);
+      const webhooks = buildWebhookItems(dashboard.instances, dashboard.webhookLogs);
+      const logs = dashboard.logs.map(mapBackendLogToUi);
+
+      if (!isMounted) return;
+
+      const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
+      setBackendUser(dashboard.user);
+      setState(prev => ({
+        ...prev,
+        userProfile: {
+          name: dashboard.user.name,
+          email: dashboard.user.email
+        },
+        instances: instances.map(instance => ({
+          ...instance,
+          messagesToday: messagesByInstance.get(instance.id) || 0
+        })),
+        messages,
+        tokens,
+        webhooks,
+        logs,
+        selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
+          ? routeInstanceId
+          : null,
+        selectedMessageId: messages[0]?.id ?? null,
+        selectedTokenId: tokens[0]?.id ?? null,
+        selectedWebhookId: webhooks[0]?.id ?? null,
+        selectedLogId: logs[0]?.id ?? null,
+        notificationCount: Math.min(3, messages.length + logs.length)
+      }));
+      setBackendStatus('connected');
+    };
+
+    const loadInstancesOnly = async () => {
+      const instances = await fetchInstances(apiBaseUrl, accessToken);
+      if (!isMounted) return;
+      applyInstancesData(instances);
+      setBackendStatus('connected');
+    };
+
+    const loadMessagesPage = async () => {
+      const [instances, messages] = await Promise.all([
+        fetchInstances(apiBaseUrl, accessToken),
+        fetchAllMessages(apiBaseUrl, accessToken)
+      ]);
+      if (!isMounted) return;
+      applyMessagesData(instances, messages);
+      setBackendStatus('connected');
+    };
+
     const sync = async () => {
       try {
-        const dashboard = await fetchDashboard(apiBaseUrl, accessToken);
-        const messagesByInstance = new Map<string, number>();
-        for (const message of dashboard.messages) {
-          messagesByInstance.set(message.instanceId, (messagesByInstance.get(message.instanceId) || 0) + 1);
+        if (state.activeView === 'overview' || state.activeView === 'webhooks' || state.activeView === 'logs') {
+          await loadDashboard();
+          return;
         }
-        const instances = dashboard.instances.map(mapBackendInstanceToUi);
-        const messages = dashboard.messages.map(mapBackendMessageToUi);
-        const tokens = dashboard.tokens.map(mapBackendTokenToUi);
-        const webhooks = buildWebhookItems(dashboard.instances, dashboard.webhookLogs);
-        const logs = dashboard.logs.map(mapBackendLogToUi);
 
-        if (!isMounted) return;
+        if (state.activeView === 'messages') {
+          await loadMessagesPage();
+          return;
+        }
 
-        const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
-        setBackendUser(dashboard.user);
-        setState(prev => ({
-          ...prev,
-          userProfile: {
-            name: dashboard.user.name,
-            email: dashboard.user.email
-          },
-          instances: instances.map(instance => ({
-            ...instance,
-            messagesToday: messagesByInstance.get(instance.id) || 0
-          })),
-          messages,
-          tokens,
-          webhooks,
-          logs,
-          selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
-            ? routeInstanceId
-            : null,
-          selectedMessageId: messages[0]?.id ?? null,
-          selectedTokenId: tokens[0]?.id ?? null,
-          selectedWebhookId: webhooks[0]?.id ?? null,
-          selectedLogId: logs[0]?.id ?? null,
-          notificationCount: Math.min(3, messages.length + logs.length)
-        }));
-        setBackendStatus('connected');
+        await loadInstancesOnly();
       } catch (error) {
         if (!isMounted) return;
         if (isAuthSessionError(error)) {
@@ -346,7 +361,111 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [accessToken, apiBaseUrl]);
+  }, [accessToken, apiBaseUrl, state.activeView]);
+
+  useEffect(() => {
+    if (!accessToken || !state.selectedInstanceId) return;
+
+    const selectedInstance = state.instances.find(item => item.id === state.selectedInstanceId);
+    if (!selectedInstance || selectedInstance.apiKey) return;
+
+    let cancelled = false;
+
+    const syncSelectedInstance = async () => {
+      try {
+        const updated = await fetchBackendInstance(apiBaseUrl, accessToken, selectedInstance.id);
+        if (cancelled) return;
+
+        if (updated.apiKey) {
+          setInstanceApiKeys(prev => ({
+            ...prev,
+            [updated.id]: updated.apiKey as string
+          }));
+        }
+
+        setState(prev => ({
+          ...prev,
+          instances: prev.instances.map(item =>
+            item.id === updated.id
+              ? {
+                  ...item,
+                  ...updated
+                }
+              : item
+          )
+        }));
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
+        }
+      }
+    };
+
+    void syncSelectedInstance();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, apiBaseUrl, state.language, state.selectedInstanceId, selectedInstance?.apiKey]);
+
+  useEffect(() => {
+    if (!accessToken || state.activeView !== 'instances' || !state.selectedInstanceId) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    let timerId: number | undefined;
+
+    const syncSelectedInstance = async () => {
+      if (cancelled || inFlight) return;
+
+      inFlight = true;
+      try {
+        const updated = await fetchBackendInstance(apiBaseUrl, accessToken, state.selectedInstanceId);
+        if (cancelled) return;
+
+        if (updated.apiKey) {
+          setInstanceApiKeys(prev => ({
+            ...prev,
+            [updated.id]: updated.apiKey as string
+          }));
+        }
+
+        setState(prev => ({
+          ...prev,
+          instances: prev.instances.map(item =>
+            item.id === updated.id
+              ? {
+                  ...item,
+                  ...updated
+                }
+              : item
+          )
+        }));
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        }
+      } finally {
+        inFlight = false;
+        if (!cancelled) {
+          timerId = window.setTimeout(() => {
+            void syncSelectedInstance();
+          }, 5000);
+        }
+      }
+    };
+
+    void syncSelectedInstance();
+
+    return () => {
+      cancelled = true;
+      if (timerId) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [accessToken, apiBaseUrl, state.activeView, state.language, state.selectedInstanceId]);
 
   const handleViewChange = (view: ActiveView) => {
     pushRoute(viewRoutes[view]);
@@ -409,81 +528,6 @@ export default function App() {
     triggerToast(message);
   };
 
-  useEffect(() => {
-    const selectedInstance = state.instances.find(item => item.id === state.selectedInstanceId) ?? null;
-
-    if (!selectedInstance || !accessToken) {
-      return;
-    }
-
-    const shouldPoll =
-      selectedInstance.status === 'Waiting QR' ||
-      selectedInstance.status === 'Reconnecting';
-
-    if (!shouldPoll) {
-      if (selectedInstance.status !== 'Connected' && lastConnectedToastInstanceId === selectedInstance.id) {
-        setLastConnectedToastInstanceId(null);
-      }
-      return;
-    }
-
-    let cancelled = false;
-
-    const syncSelectedInstance = async () => {
-      try {
-        const updated = await fetchBackendInstance(apiBaseUrl, accessToken, selectedInstance.id);
-        if (cancelled) return;
-
-        setState(prev => {
-          const current = prev.instances.find(item => item.id === selectedInstance.id);
-          const nextInstances = prev.instances.map(item =>
-            item.id === selectedInstance.id
-              ? {
-                  ...item,
-                  ...updated,
-                  qrExpiresAt: updated.qrCode ? updated.qrExpiresAt ?? item.qrExpiresAt : undefined
-                }
-              : item
-          );
-
-          if (
-            current &&
-            current.status !== 'Connected' &&
-            updated.status === 'Connected' &&
-            lastConnectedToastInstanceId !== selectedInstance.id
-          ) {
-            setLastConnectedToastInstanceId(selectedInstance.id);
-            triggerToast(
-              state.language === 'RU'
-                ? `WhatsApp успешно подключён: ${updated.number || updated.name}`
-                : `WhatsApp connected successfully: ${updated.number || updated.name}`
-            );
-          }
-
-          return {
-            ...prev,
-            instances: nextInstances
-          };
-        });
-      } catch (error) {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status === 401) {
-          handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
-        }
-      }
-    };
-
-    void syncSelectedInstance();
-    const intervalId = window.setInterval(() => {
-      void syncSelectedInstance();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [accessToken, apiBaseUrl, handleAuthRequired, lastConnectedToastInstanceId, state.instances, state.language, state.selectedInstanceId]);
-
   const applyDashboardData = (dashboard: Awaited<ReturnType<typeof fetchDashboard>>) => {
     const messagesByInstance = new Map<string, number>();
     for (const message of dashboard.messages) {
@@ -523,6 +567,46 @@ export default function App() {
     }));
   };
 
+  const applyInstancesData = (instances: Instance[]) => {
+    const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
+
+    setState(prev => ({
+      ...prev,
+      instances,
+      selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
+        ? routeInstanceId
+        : prev.selectedInstanceId && instances.some(instance => instance.id === prev.selectedInstanceId)
+          ? prev.selectedInstanceId
+          : null
+    }));
+  };
+
+  const applyMessagesData = (instances: Instance[], messages: Message[]) => {
+    const messagesByInstance = new Map<string, number>();
+    for (const message of messages) {
+      if (!message.instanceId) continue;
+      messagesByInstance.set(message.instanceId, (messagesByInstance.get(message.instanceId) || 0) + 1);
+    }
+
+    const routeInstanceId = typeof window !== 'undefined' ? getInstanceIdFromPath(window.location.pathname) : null;
+
+    setState(prev => ({
+      ...prev,
+      instances: instances.map(instance => ({
+        ...instance,
+        messagesToday: messagesByInstance.get(instance.id) || instance.messagesToday || 0
+      })),
+      messages,
+      selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
+        ? routeInstanceId
+        : prev.selectedInstanceId && instances.some(instance => instance.id === prev.selectedInstanceId)
+          ? prev.selectedInstanceId
+          : null,
+      selectedMessageId: messages[0]?.id ?? null,
+      notificationCount: Math.min(3, messages.length)
+    }));
+  };
+
   const handleRefreshMessages = async () => {
     if (!accessToken) {
       handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
@@ -530,8 +614,11 @@ export default function App() {
     }
 
     try {
-      const dashboard = await fetchDashboard(apiBaseUrl, accessToken);
-      applyDashboardData(dashboard);
+      const [instances, messages] = await Promise.all([
+        fetchInstances(apiBaseUrl, accessToken),
+        fetchAllMessages(apiBaseUrl, accessToken)
+      ]);
+      applyMessagesData(instances, messages);
       triggerToast(state.language === 'RU' ? 'Сообщения обновлены' : 'Messages refreshed');
     } catch (error) {
       if (isAuthSessionError(error)) {
@@ -657,19 +744,34 @@ export default function App() {
       const created = await createBackendInstance(apiBaseUrl, accessToken, {
         name: newNumName.trim()
       });
-      
-
-      const connected = await connectBackendInstance(apiBaseUrl, accessToken, created.id);
-
+      if (created.apiKey) {
+        setInstanceApiKeys(prev => ({
+          ...prev,
+          [created.instance.id]: created.apiKey
+        }));
+      }
       setState(prev => ({
         ...prev,
-        instances: [connected, ...prev.instances.filter(item => item.id !== connected.id)],
-        selectedInstanceId: connected.id
+        instances: [created.instance, ...prev.instances.filter(item => item.id !== created.instance.id)],
+        selectedInstanceId: created.instance.id
       }));
       setShowAddNumberModal(false);
       setNewNumName('');
-      handleViewChange('instances');
-      triggerToast(state.language === 'RU' ? '������� ������.' : 'Instance created.');
+      void handleSelectInstance(created.instance.id);
+      triggerToast(state.language === 'RU' ? 'Инстанс создан.' : 'Instance created.');
+
+      void connectBackendInstance(apiBaseUrl, accessToken, created.instance.id)
+        .then(connected => {
+          setState(prev => ({
+            ...prev,
+            instances: prev.instances.map(item => (item.id === connected.id ? connected : item)),
+            selectedInstanceId: connected.id
+          }));
+        })
+        .catch(error => {
+          const message = error instanceof Error ? error.message : 'Failed to connect instance';
+          triggerToast(message);
+        });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
@@ -764,6 +866,37 @@ export default function App() {
       triggerToast(message);
     } finally {
       setPendingAction(null);
+    }
+  };
+
+  const handleRefreshInstance = async (id: string) => {
+    if (!accessToken) {
+      handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР». Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+      return;
+    }
+
+    try {
+      const updated = await fetchBackendInstance(apiBaseUrl, accessToken, id);
+      setState(prev => ({
+        ...prev,
+        instances: prev.instances.map(item => (item.id === id ? updated : item)),
+        selectedInstanceId: id
+      }));
+
+      if (updated.apiKey) {
+        setInstanceApiKeys(prev => ({
+          ...prev,
+          [updated.id]: updated.apiKey as string
+        }));
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР». Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to refresh instance';
+      triggerToast(message);
     }
   };
 
@@ -880,7 +1013,7 @@ export default function App() {
   const handleSendWebhookTest = async (id: string, input: BackendInstanceSettingsInput) => {
     if (pendingAction) return null;
     if (!accessToken) {
-      handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
       return null;
     }
 
@@ -895,7 +1028,7 @@ export default function App() {
       return result;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         return null;
       }
       const message = error instanceof Error ? error.message : 'Failed to send webhook test';
@@ -964,28 +1097,6 @@ export default function App() {
 
     setState(prev => ({ ...prev, selectedInstanceId: id }));
     scrollWorkspaceToTop();
-
-    if (!id || !accessToken) return;
-
-    try {
-      const updated = await fetchBackendInstance(apiBaseUrl, accessToken, id);
-      setState(prev => ({
-        ...prev,
-        instances: prev.instances.map(item =>
-          item.id === id
-            ? {
-                ...item,
-                ...updated,
-                qrExpiresAt: updated.qrCode ? updated.qrExpiresAt ?? item.qrExpiresAt : undefined
-              }
-            : item
-        )
-      }));
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
-      }
-    }
   };
   const handleSelectMessage = (id: string | null) => setState(prev => ({ ...prev, selectedMessageId: id }));
   const handleSelectToken = (id: string | null) => setState(prev => ({ ...prev, selectedTokenId: id }));
@@ -1079,12 +1190,17 @@ export default function App() {
         return (
           <InstancesView
             state={state}
-            apiKey={state.selectedInstanceId ? instanceApiKeys[state.selectedInstanceId] ?? null : null}
+            apiKey={state.selectedInstanceId
+              ? state.instances.find(instance => instance.id === state.selectedInstanceId)?.apiKey
+                ?? instanceApiKeys[state.selectedInstanceId]
+                ?? null
+              : null}
             onSelectInstance={handleSelectInstance}
             onAddNumberClick={() => setShowAddNumberModal(true)}
             onUpdateInstanceStatus={handleUpdateInstanceStatus}
             onLogoutInstance={handleLogoutInstance}
             onRequestInstanceQr={handleRequestInstanceQr}
+            onRefreshInstance={handleRefreshInstance}
             onRenameInstance={handleRenameInstance}
             onDeleteInstance={handleDeleteInstance}
             onUpdateInstanceSettings={handleUpdateInstanceSettings}
@@ -1107,7 +1223,11 @@ export default function App() {
         return (
           <ApiDocsPage
             state={state}
-            apiKey={state.selectedInstanceId ? instanceApiKeys[state.selectedInstanceId] ?? null : null}
+            apiKey={state.selectedInstanceId
+              ? state.instances.find(instance => instance.id === state.selectedInstanceId)?.apiKey
+                ?? instanceApiKeys[state.selectedInstanceId]
+                ?? null
+              : null}
             instanceApiKeys={instanceApiKeys}
           />
         );

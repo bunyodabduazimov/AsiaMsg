@@ -27,6 +27,8 @@ export interface BackendInstance {
   id: string;
   name: string;
   phoneNumber: string | null;
+  apiKey?: string | null;
+  messagesToday?: number;
   status: 'WAITING_QR' | 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
   qrCode?: string | null;
   qrExpiresAt?: string | null;
@@ -40,6 +42,9 @@ export interface BackendInstance {
     webhookOnAck?: boolean | null;
     webhookDownloadMedia?: boolean | null;
     webhookOnReaction?: boolean | null;
+    subscriptionPlan?: string | null;
+    subscriptionTrialStartedAt?: string | null;
+    subscriptionTrialEndsAt?: string | null;
   } | null;
 }
 
@@ -158,6 +163,12 @@ export interface BackendConnectionInfo {
 export interface BackendInstanceInput {
   name: string;
   phoneNumber?: string | null;
+}
+
+export interface BackendCreatedInstanceResponse {
+  instance: Instance;
+  apiKey: string | null;
+  message: string | null;
 }
 
 export interface BackendInstanceSettingsInput {
@@ -331,6 +342,11 @@ export const fetchInstances = (apiBaseUrl: string, accessToken: string) =>
     items.map(mapBackendInstanceToUi)
   );
 
+export const fetchAllMessages = (apiBaseUrl: string, accessToken: string) =>
+  fetchJson<{ success: boolean; data: BackendMessage[] }>(apiBaseUrl, '/api/messages/all', {}, accessToken).then(response =>
+    response.data.map(mapBackendMessageToUi)
+  );
+
 export const fetchBackendInstance = (
   apiBaseUrl: string,
   accessToken: string,
@@ -342,22 +358,15 @@ export const createBackendInstance = (
   apiBaseUrl: string,
   accessToken: string,
   input: BackendInstanceInput
-) =>
-  fetchJson<any>(apiBaseUrl, '/api/instances', {
+) : Promise<BackendCreatedInstanceResponse> =>
+  fetchJson<BackendCreatedInstanceResponse>(apiBaseUrl, '/api/instances', {
     method: 'POST',
     body: JSON.stringify(input)
-  }, accessToken).then(response => {
-    // Response may include apiKey for newly created instance
-    if (response.apiKey) {
-      // Store API key in localStorage for user to see
-      sessionStorage.setItem('createdInstanceApiKey', JSON.stringify({
-        instanceId: response.instance?.id || response.id,
-        apiKey: response.apiKey,
-        apiKeyPreview: response.apiKeyPreview
-      }));
-    }
-    return mapBackendInstanceToUi(response.instance || response);
-  });
+  }, accessToken).then(response => ({
+    instance: mapBackendInstanceToUi(response.instance as unknown as BackendInstance),
+    apiKey: response.apiKey,
+    message: response.message
+  }));
 
 export const updateBackendInstance = (
   apiBaseUrl: string,
@@ -476,9 +485,13 @@ export const mapBackendInstanceToUi = (item: BackendInstance): Instance => {
     name: item.name,
     number,
     provider: 'Baileys',
+    apiKey: item.apiKey ?? null,
+    subscriptionPlan: item.settings?.subscriptionPlan ?? 'Unlimited',
+    subscriptionTrialStartedAt: item.settings?.subscriptionTrialStartedAt ?? null,
+    subscriptionTrialEndsAt: item.settings?.subscriptionTrialEndsAt ?? null,
     status: mapBackendStatusToUi(item.status),
     lastActive: formatRelativeTime(updatedAt),
-    messagesToday: 0,
+    messagesToday: item.messagesToday ?? 0,
     qrCode: item.qrCode || '',
     qrExpiresAt: item.qrExpiresAt || undefined,
     webhookUrl: item.settings?.webhookUrl || undefined,
@@ -528,28 +541,203 @@ const statusToUiMessageStatus = (status: string | null): Message['status'] => {
   return 'Отправлено';
 };
 
+const readText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const formatDateOnly = (value: Date) =>
+  new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(value);
+
+const extractMessageContentType = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return 'other';
+  }
+
+  const data = payload as Record<string, unknown>;
+  const request = data.request && typeof data.request === 'object' ? (data.request as Record<string, unknown>) : null;
+  const raw = data.raw && typeof data.raw === 'object' ? (data.raw as Record<string, unknown>) : null;
+  const rawMessage = raw?.message && typeof raw.message === 'object' ? (raw.message as Record<string, unknown>) : null;
+
+  const typeValue = readText(data.messageType) || readText(request?.type);
+  const normalizedType = typeValue.toLowerCase();
+
+  if (
+    normalizedType.includes('text') ||
+    Boolean(readText(request?.text)) ||
+    Boolean(readText(data.text)) ||
+    Boolean(readText(data.conversation))
+  ) {
+    return 'text';
+  }
+
+  if (normalizedType.includes('image') || rawMessage?.imageMessage || request?.imageUrl) {
+    return 'image';
+  }
+
+  if (normalizedType.includes('voice')) {
+    return 'voice';
+  }
+
+  if (normalizedType.includes('audio')) {
+    return 'voice';
+  }
+
+  if (normalizedType.includes('document') || rawMessage?.documentMessage || request?.documentUrl || request?.fileName) {
+    return 'document';
+  }
+
+  if (normalizedType.includes('sticker') || rawMessage?.stickerMessage || request?.stickerUrl) {
+    return 'sticker';
+  }
+
+  if (normalizedType.includes('video') || rawMessage?.videoMessage || request?.videoUrl) {
+    return 'other';
+  }
+
+  if (normalizedType.includes('contact') || normalizedType.includes('location') || normalizedType.includes('reaction')) {
+    return 'other';
+  }
+
+  if (data.hasMedia === true || request?.attachment) {
+    return 'other';
+  }
+
+  return normalizedType ? 'other' : 'other';
+};
+
 const extractMessageText = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') {
     return '';
   }
 
   const data = payload as Record<string, unknown>;
-  const candidate =
-    (typeof data.text === 'string' && data.text) ||
-    (typeof data.conversation === 'string' && data.conversation) ||
-    (typeof data.caption === 'string' && data.caption) ||
-    (typeof data.message === 'string' && data.message);
+  const request = data.request && typeof data.request === 'object' ? (data.request as Record<string, unknown>) : null;
+  const raw = data.raw && typeof data.raw === 'object' ? (data.raw as Record<string, unknown>) : null;
+  const rawMessage = raw?.message && typeof raw.message === 'object' ? (raw.message as Record<string, unknown>) : null;
+  const whatsappResponse = data.whatsappResponse && typeof data.whatsappResponse === 'object'
+    ? (data.whatsappResponse as Record<string, unknown>)
+    : null;
 
-  return candidate || JSON.stringify(payload, null, 2);
+  const candidate = [
+    readText(data.text),
+    readText(data.conversation),
+    readText(data.caption),
+    readText(data.message),
+    readText(request?.text),
+    readText(request?.conversation),
+    readText(request?.caption),
+    readText(rawMessage?.conversation),
+    readText((rawMessage?.extendedTextMessage as Record<string, unknown> | undefined)?.text),
+    readText((rawMessage?.imageMessage as Record<string, unknown> | undefined)?.caption),
+    readText((rawMessage?.videoMessage as Record<string, unknown> | undefined)?.caption),
+    readText((rawMessage?.documentMessage as Record<string, unknown> | undefined)?.caption),
+    readText(whatsappResponse?.text)
+  ].find(Boolean);
+
+  if (candidate) {
+    return candidate;
+  }
+
+  const attachmentLabel =
+    readText(request?.fileName) ||
+    readText((request?.attachment as Record<string, unknown> | undefined)?.name) ||
+    readText(request?.imageUrl) ||
+    readText(request?.documentUrl) ||
+    readText(request?.audioUrl) ||
+    readText(request?.voiceUrl) ||
+    readText(request?.videoUrl) ||
+    readText(request?.stickerUrl);
+
+  if (attachmentLabel) {
+    return attachmentLabel;
+  }
+
+  const messageType = readText(data.messageType) || readText(request?.type);
+  if (messageType) {
+    const typeLabelMap: Record<string, string> = {
+      text: 'Текстовое сообщение',
+      image: 'Изображение',
+      document: 'Документ',
+      audio: 'Аудио',
+      voice: 'Голосовое',
+      video: 'Видео',
+      sticker: 'Стикер',
+      contact: 'Контакт',
+      location: 'Локация',
+      reaction: 'Реакция',
+      ack: 'Статус сообщения',
+      unknown: 'Сообщение'
+    };
+
+    return typeLabelMap[messageType.toLowerCase()] || `Сообщение (${messageType})`;
+  }
+
+  if (
+    data.hasMedia === true ||
+    request?.attachment ||
+    request?.imageUrl ||
+    request?.documentUrl ||
+    request?.audioUrl ||
+    request?.voiceUrl ||
+    request?.videoUrl ||
+    request?.stickerUrl
+  ) {
+    return 'Сообщение с вложением';
+  }
+
+  return 'Сообщение';
+};
+
+const describeMessageData = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const data = payload as Record<string, unknown>;
+  const request = data.request && typeof data.request === 'object' ? (data.request as Record<string, unknown>) : null;
+  const attachment = request?.attachment && typeof request.attachment === 'object'
+    ? (request.attachment as Record<string, unknown>)
+    : null;
+
+  const attachmentName = readText(attachment?.name);
+  const attachmentType = readText(attachment?.type);
+  const messageType = readText(data.messageType) || readText(request?.type);
+
+  if (attachmentName && attachmentType) {
+    return `${attachmentName} · ${attachmentType}`;
+  }
+
+  if (attachmentName) {
+    return attachmentName;
+  }
+
+  if (attachmentType) {
+    return attachmentType;
+  }
+
+  if (messageType) {
+    return messageType;
+  }
+
+  if (data.hasMedia === true) {
+    return 'media';
+  }
+
+  return '';
 };
 
 export const mapBackendMessageToUi = (item: BackendMessage): Message => ({
   id: item.id,
   number: item.remoteJid,
   instance: item.instance?.name || item.instanceId,
+  instanceId: item.instanceId,
   type: directionToType(item.direction),
   status: statusToUiMessageStatus(item.status),
   time: formatDateTime(new Date(item.sentAt || item.createdAt)),
+  dataDate: formatDateOnly(new Date(item.sentAt || item.createdAt)),
+  contentType: extractMessageContentType(item.payload),
   messageText: extractMessageText(item.payload),
   details: item.messageId || item.remoteJid,
   attachmentName: (() => {
@@ -562,6 +750,7 @@ export const mapBackendMessageToUi = (item: BackendMessage): Message => ({
     const attachment = payload && typeof payload === 'object' ? payload.attachment as Record<string, unknown> | undefined : undefined;
     return typeof attachment?.type === 'string' ? attachment.type : undefined;
   })(),
+  attachmentData: describeMessageData(item.payload),
   statusHistory: []
 });
 

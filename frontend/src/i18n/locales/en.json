@@ -27,7 +27,7 @@
     "logout": "Logout",
     "notifications": "Notifications",
     "notif1": "Instance \"Sales Bot\" successfully connected",
-    "notif2": "Reached 25% of monthly message limit",
+    "notif2": "Instance subscription is active",
     "notif3": "Webhook delivery error detected on CRM Sync"
   },
   "auth": {

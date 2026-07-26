@@ -5,6 +5,7 @@ import {
 	createMessage,
 	deleteMessage,
 	getMessageStatistics,
+	listAllMessages,
 	listMessages,
 	resendMessageById,
 	resendMessagesByStatus,
@@ -14,6 +15,7 @@ import {
 export const messageRouter = Router();
 
 messageRouter.use(authenticate);
+messageRouter.get('/all', listAllMessages);
 messageRouter.get('/', listMessages);
 messageRouter.get('/statistics', getMessageStatistics);
 messageRouter.post('/', createMessage);

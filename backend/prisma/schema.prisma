@@ -51,7 +51,7 @@ model Instance {
   name         String
   phoneNumber  String?
   apiKeyHash   String?          @unique
-  apiKeyPreview String?
+  apiKeyEncrypted String?       @db.Text
   apiKeyCreatedAt DateTime?
   apiKeyLastUsedAt DateTime?
   status       InstanceStatus   @default(WAITING_QR)
@@ -99,6 +99,9 @@ model InstanceSetting {
   instanceId            String   @unique
   webhookUrl            String?
   webhookSecret         String?
+  subscriptionPlan      String   @default("Unlimited")
+  subscriptionTrialStartedAt DateTime?
+  subscriptionTrialEndsAt DateTime?
   webhookRetryCount     Int      @default(3)
   webhookOnReceived     Boolean  @default(false)
   webhookOnCreate       Boolean  @default(false)

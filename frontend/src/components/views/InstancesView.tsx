@@ -12,9 +12,7 @@ import {
   Plus,
   QrCode,
   RefreshCw,
-  RotateCcw,
   Search,
-  SquareCheckBig,
   SquareDashedMousePointer,
   Trash2,
   X
@@ -31,6 +29,7 @@ interface InstancesViewProps {
   onUpdateInstanceStatus: (id: string, status: Instance['status']) => void;
   onLogoutInstance: (id: string) => void;
   onRequestInstanceQr: (id: string) => void;
+  onRefreshInstance: (id: string) => void;
   onRenameInstance: (id: string, name: string) => void;
   onDeleteInstance: (id: string) => void;
   onUpdateInstanceSettings: (id: string, input: WebhookSettingsInput) => void;
@@ -65,6 +64,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   onUpdateInstanceStatus,
   onLogoutInstance,
   onRequestInstanceQr,
+  onRefreshInstance,
   onRenameInstance,
   onDeleteInstance,
   onUpdateInstanceSettings,
@@ -116,6 +116,24 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     ? 'X-API-Key доступен после создания инстанса'
     : 'X-API-Key is available after instance creation';
   const phoneValue = selectedInstance?.number?.trim() || '—';
+  const subscriptionPlan = selectedInstance?.subscriptionPlan || 'Unlimited';
+  const subscriptionTrialEndsAt = selectedInstance?.subscriptionTrialEndsAt
+    ? new Date(selectedInstance.subscriptionTrialEndsAt)
+    : null;
+  const isSubscriptionTrialActive = subscriptionTrialEndsAt ? subscriptionTrialEndsAt.getTime() > Date.now() : false;
+  const subscriptionPlanLabel = subscriptionPlan === 'Unlimited'
+    ? (isRu ? 'Безлимит' : 'Unlimited')
+    : subscriptionPlan;
+  const subscriptionTrialLabel = subscriptionTrialEndsAt
+    ? subscriptionTrialEndsAt.toLocaleDateString(isRu ? 'ru-RU' : 'en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      })
+    : null;
+  const subscriptionDisplayLabel = isSubscriptionTrialActive && subscriptionTrialLabel
+    ? subscriptionTrialLabel
+    : subscriptionPlanLabel;
 
   const copyToClipboard = async (text: string, field: string) => {
     try {
@@ -136,7 +154,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     if (actionLoading) return;
     const rect = triggerEl.getBoundingClientRect();
     const menuWidth = 224;
-    const menuHeight = 128;
+    const menuHeight = 168;
     const canOpenDown = rect.bottom + menuHeight + 12 <= window.innerHeight;
     const top = canOpenDown
       ? Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 8)
@@ -318,11 +336,11 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
+                onClick={() => onRefreshInstance(selectedInstance.id)}
                 disabled={actionLoading}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                <RefreshCw className="h-4 w-4" />
                 {t('instances.refresh')}
               </button>
             </div>
@@ -376,7 +394,10 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 />
                 <InfoCard label={t('instances.created')} value={selectedInstance.createdDate || '—'} />
                 <InfoCard label={t('instances.lastActivity')} value={selectedInstance.lastActive} />
-                <InfoCard label={t('instances.messages')} value={String(selectedInstance.messagesToday)} />
+                <InfoCard
+                  label={isRu ? 'Подписка инстанса' : 'Instance subscription'}
+                  value={subscriptionDisplayLabel}
+                />
                 <InfoCard
                   label={t('instances.phone')}
                   value={phoneValue}
@@ -389,41 +410,29 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => onRequestInstanceQr(selectedInstance.id)}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareCheckBig className="h-4 w-4" />}
-                {t('instances.connect')}
-              </button>
-              <button
-                type="button"
-                onClick={() => runStatusAction(selectedInstance.id, 'Waiting QR')}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                {t('instances.getQr')}
-              </button>
+                onClick={() => {
+                  if (isConnected) {
+                    runStatusAction(selectedInstance.id, 'Disconnected');
+                    return;
+                  }
 
-              <button
-                type="button"
-                onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
+                  onRequestInstanceQr(selectedInstance.id);
+                }}
                 disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isConnected
+                    ? 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin text-amber-500" /> : <RotateCcw className="h-4 w-4 text-amber-500" />}
-                {t('instances.restart')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => runStatusAction(selectedInstance.id, 'Disconnected')}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
-                {t('instances.disconnect')}
+                {actionLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isConnected ? (
+                  <SquareDashedMousePointer className="h-4 w-4" />
+                ) : (
+                  <QrCode className="h-4 w-4" />
+                )}
+                {isConnected ? (isRu ? 'Отключить' : 'Disconnect') : (isRu ? 'Подключить' : 'Connect')}
               </button>
 
               <button
@@ -444,65 +453,6 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                   ? t('instances.sessionActive')
                   : 'Instance state is tracked from the backend.'}
             </p>
-          </div>
-
-          <div className="hidden">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <InfoCard
-                label={t('instances.instanceId')}
-                value={selectedInstance.id}
-                onCopy={() => void copyToClipboard(selectedInstance.id, 'id')}
-                copied={copiedField === 'id'}
-              />
-              <InfoCard
-                label="X-API-Key"
-                value={apiKey || apiKeyFallback}
-                onCopy={apiKey ? () => void copyToClipboard(apiKey, 'api-key') : undefined}
-                copied={copiedField === 'api-key'}
-              />
-              <InfoCard label={isRu ? 'Создан' : 'Created'} value={selectedInstance.createdDate || '—'} />
-              <InfoCard label={isRu ? 'Последняя активность' : 'Last active'} value={selectedInstance.lastActive} />
-              <InfoCard label={isRu ? 'Сообщений' : 'Messages'} value={String(selectedInstance.messagesToday)} />
-              <InfoCard
-                label={t('instances.phone')}
-                value={phoneValue}
-                onCopy={phoneValue !== '—' ? () => void copyToClipboard(phoneValue, 'phone') : undefined}
-                copied={copiedField === 'phone'}
-              />
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                    {isRu ? 'Быстрые действия' : 'Quick actions'}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {isRu ? 'Как в UltraMsg: отдельная страница для выбранного инстанса.' : 'Like UltraMsg: a separate page for the selected instance.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => window.open('https://web.whatsapp.com', '_blank', 'noreferrer')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  <ExternalLink className="h-4 w-4 text-blue-600" />
-                  {isRu ? 'Открыть WhatsApp Web' : 'Open WhatsApp Web'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runStatusAction(selectedInstance.id, 'Reconnecting')}
-                  disabled={actionLoading}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin text-amber-500" /> : <RotateCcw className="h-4 w-4 text-amber-500" />}
-                  {isRu ? 'Перезапуск' : 'Reconnect'}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -674,7 +624,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 <th className="px-5 py-4">{isRu ? 'Номер' : 'Number'}</th>
                 <th className="px-5 py-4">{isRu ? 'Статус' : 'Status'}</th>
                 <th className="px-5 py-4">{isRu ? 'Активность' : 'Activity'}</th>
-                <th className="px-5 py-4 text-center">{isRu ? 'Сообщений' : 'Messages'}</th>
+                <th className="px-5 py-4 text-center">{isRu ? 'Подписка' : 'Subscription'}</th>
                 <th className="px-5 py-4 text-right">{isRu ? 'Действия' : 'Actions'}</th>
               </tr>
             </thead>
@@ -689,8 +639,9 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 paginatedInstances.map(item => (
                   <tr
                     key={item.id}
-                    onClick={() => openDetails(item.id)}
-                    className={`group cursor-pointer transition hover:bg-blue-50/40 dark:hover:bg-slate-800/50 ${
+                    onDoubleClick={() => openDetails(item.id)}
+                    title={isRu ? 'Дважды нажмите, чтобы открыть детали' : 'Double-click to open details'}
+                    className={`group transition hover:bg-blue-50/40 dark:hover:bg-slate-800/50 ${
                       state.selectedInstanceId === item.id ? 'bg-blue-50/50 dark:bg-blue-950/15' : ''
                     }`}
                   >
@@ -702,8 +653,16 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                       <StatusBadge status={item.status} size="sm" />
                     </td>
                     <td className="px-5 py-5 text-slate-500 dark:text-slate-400">{item.lastActive}</td>
-                    <td className="px-5 py-5 text-center font-mono font-semibold text-slate-900 dark:text-slate-100">
-                      {item.messagesToday}
+                    <td className="px-5 py-5 text-center font-semibold text-slate-900 dark:text-slate-100">
+                      {item.subscriptionTrialEndsAt
+                        ? new Date(item.subscriptionTrialEndsAt).toLocaleDateString(isRu ? 'ru-RU' : 'en-US', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          })
+                        : (item.subscriptionPlan === 'Unlimited'
+                            ? (isRu ? 'Безлимит' : 'Unlimited')
+                            : (item.subscriptionPlan || (isRu ? 'Безлимит' : 'Unlimited')))}
                     </td>
                     <td className="relative z-[120] px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex items-center justify-end">
@@ -803,6 +762,14 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 onClick={e => e.stopPropagation()}
               >
                 <div className="p-2">
+                  <MenuItem
+                    label={isRu ? 'Детали' : 'Details'}
+                    icon={<ExternalLink className="h-4 w-4" />}
+                    onClick={() => {
+                      openDetails(openMenuInstance.id);
+                    }}
+                    disabled={actionLoading}
+                  />
                   <MenuItem
                     label={isRu ? 'Изменить' : 'Edit'}
                     icon={<Pencil className="h-4 w-4" />}

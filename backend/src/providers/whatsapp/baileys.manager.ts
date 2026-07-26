@@ -68,6 +68,7 @@ const nativeImport = (specifier: string) => Function('specifier', 'return import
 
 export class BaileysManager {
   private readonly instances = new Map<string, ManagedInstance>();
+  private readonly connectionTokens = new Map<string, number>();
   private readonly manualDisconnects = new Set<string>();
   private readonly reconnectSuppressed = new Set<string>();
   private readonly qrWaiters = new Map<string, QrWaiter[]>();
@@ -78,6 +79,13 @@ export class BaileysManager {
     if (this.instances.has(instance.id)) {
       return this.instances.get(instance.id)!;
     }
+
+    if (options.suppressReconnect) {
+      this.reconnectSuppressed.add(instance.id);
+    }
+
+    const connectionToken = (this.connectionTokens.get(instance.id) ?? 0) + 1;
+    this.connectionTokens.set(instance.id, connectionToken);
 
     const {
       default: makeWASocket,
@@ -214,8 +222,15 @@ export class BaileysManager {
     });
 
     socket.ev.on('connection.update', async update => {
+      if (!this.isCurrentConnection(instance.id, connectionToken)) {
+        return;
+      }
+
       if (update.qr) {
         const qrCode = await QRCode.toDataURL(update.qr);
+        if (!this.isCurrentConnection(instance.id, connectionToken)) {
+          return;
+        }
         managed.qrCode = qrCode;
         managed.status = 'WAITING_QR';
         await this.repository.updateStatus(instance.id, 'WAITING_QR', qrCode);
@@ -226,6 +241,9 @@ export class BaileysManager {
       }
 
       if (update.connection === 'connecting') {
+        if (!this.isCurrentConnection(instance.id, connectionToken)) {
+          return;
+        }
         managed.status = 'CONNECTING';
         await this.repository.updateStatus(instance.id, 'CONNECTING', managed.qrCode);
         emitToUser(instance.userId, 'instance:status', {
@@ -239,6 +257,9 @@ export class BaileysManager {
       }
 
       if (update.connection === 'open') {
+        if (!this.isCurrentConnection(instance.id, connectionToken)) {
+          return;
+        }
         const connectedNumber = this.normalizePhoneNumber(socket.user?.id ?? instance.phoneNumber ?? null);
         await this.repository.update(instance.id, {
           status: 'CONNECTED',
@@ -260,6 +281,10 @@ export class BaileysManager {
       }
 
       if (update.connection === 'close') {
+        if (!this.isCurrentConnection(instance.id, connectionToken)) {
+          return;
+        }
+
         const statusCode = (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
         const wasManuallyDisconnected = this.manualDisconnects.has(instance.id);
         const reconnectWasSuppressed = this.reconnectSuppressed.has(instance.id);
@@ -444,6 +469,10 @@ export class BaileysManager {
       clearTimeout(waiter.timer);
       waiter.resolve(connected);
     }
+  }
+
+  private isCurrentConnection(instanceId: string, token: number) {
+    return this.connectionTokens.get(instanceId) === token;
   }
 
   private pushMessageToRuntimeCache(managed: ManagedInstance, message: any) {

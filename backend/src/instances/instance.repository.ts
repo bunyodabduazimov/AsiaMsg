@@ -40,11 +40,20 @@ export class InstanceRepository {
   }
 
   create(userId: string, data: { name: string; phoneNumber: string | null }) {
+    const trialStartedAt = new Date();
+    const trialEndsAt = new Date(trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+
     return prisma.instance.create({
       data: {
         ...data,
         user: { connect: { id: userId } },
-        settings: { create: {} }
+        settings: {
+          create: {
+            subscriptionPlan: 'Unlimited',
+            subscriptionTrialStartedAt: trialStartedAt,
+            subscriptionTrialEndsAt: trialEndsAt
+          }
+        }
       },
       include: { session: true, settings: true }
     });
@@ -92,12 +101,12 @@ export class InstanceRepository {
     });
   }
 
-  setApiKey(instanceId: string, apiKeyHash: string, apiKeyPreview: string) {
+  setApiKey(instanceId: string, apiKeyHash: string, apiKeyEncrypted: string) {
     return prisma.instance.update({
       where: { id: instanceId },
       data: {
         apiKeyHash: apiKeyHash,
-        apiKeyPreview: apiKeyPreview,
+        apiKeyEncrypted: apiKeyEncrypted,
         apiKeyCreatedAt: new Date(),
         apiKeyLastUsedAt: null
       },
@@ -110,7 +119,7 @@ export class InstanceRepository {
       where: { id: instanceId },
       data: {
         apiKeyHash: null,
-        apiKeyPreview: null,
+        apiKeyEncrypted: null,
         apiKeyCreatedAt: null,
         apiKeyLastUsedAt: null
       },

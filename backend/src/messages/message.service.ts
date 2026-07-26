@@ -41,13 +41,13 @@ export class MessageService {
     userId: string;
     instanceId: string;
     input: CreateMessageInput;
+    attempts: number;
   }> = [];
 
   private processingOutboundQueue = false;
 
   async create(userId: string, input: CreateMessageInput) {
     const instance = await this.getInstanceByIdOrThrow(userId, input.instanceId);
-    await this.ensureWhatsAppConnected(instance);
     const payload = this.buildQueuedPayload(input);
 
     const createdMessage = await prisma.message.create({
@@ -74,7 +74,8 @@ export class MessageService {
       messageRecordId: createdMessage.id,
       userId,
       instanceId: instance.id,
-      input
+      input,
+      attempts: 0
     });
 
     return createdMessage;
@@ -107,6 +108,30 @@ export class MessageService {
         limit: query.limit ?? 50,
         offset: query.offset ?? 0
       }
+    };
+  }
+
+  async listAll(userId: string) {
+    const items = await prisma.message.findMany({
+      where: {
+        instance: {
+          userId
+        }
+      },
+      include: {
+        instance: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return {
+      success: true,
+      data: items
     };
   }
 
@@ -385,6 +410,7 @@ export class MessageService {
     userId: string;
     instanceId: string;
     input: CreateMessageInput;
+    attempts: number;
   }) {
     this.outboundQueue.push(job);
     void this.processOutboundQueue();
@@ -416,6 +442,7 @@ export class MessageService {
     userId: string;
     instanceId: string;
     input: CreateMessageInput;
+    attempts: number;
   }) {
     try {
       const instance = await this.getInstanceByIdOrThrow(job.userId, job.instanceId);
@@ -453,6 +480,24 @@ export class MessageService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (/whatsapp instance is not connected|not running|not connected/i.test(message) && job.attempts < 5) {
+        await prisma.message.update({
+          where: { id: job.messageRecordId },
+          data: {
+            status: 'queued'
+          }
+        });
+
+        setTimeout(() => {
+          this.enqueueOutboundMessage({
+            ...job,
+            attempts: job.attempts + 1
+          });
+        }, 5000);
+        return;
+      }
+
       await prisma.message.update({
         where: { id: job.messageRecordId },
         data: {
@@ -597,8 +642,8 @@ export class MessageService {
       await baileysManager.waitForConnected(instance.id, 60000);
     }
 
-    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
-      await baileysManager.waitForConnected(instance.id, 60000);
+    if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED' && canRestoreSession) {
+      await baileysManager.waitForConnected(instance.id, 15000);
     }
 
     if (baileysManager.isRunning(instance.id) && baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED' && canRestoreSession) {
@@ -607,7 +652,7 @@ export class MessageService {
       await baileysManager.waitForConnected(instance.id, 60000);
     }
 
-    if (!baileysManager.isRunning(instance.id) || baileysManager.getRuntimeStatus(instance.id) !== 'CONNECTED') {
+    if (!baileysManager.isRunning(instance.id)) {
       throw new AppError('WhatsApp instance is not connected', 409);
     }
   }

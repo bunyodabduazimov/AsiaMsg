@@ -7,7 +7,6 @@ import {
   Webhook,
   FileText,
   Settings,
-  MessageCircle,
   X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +18,6 @@ interface SidebarProps {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
   language: 'RU' | 'EN';
-  messageLimitCount?: number;
   theme?: 'light' | 'dark';
   isOpen?: boolean;
   isCollapsed?: boolean;
@@ -29,7 +27,6 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onViewChange,
-  messageLimitCount = 148250,
   theme = 'light',
   isOpen = true,
   isCollapsed = false,
@@ -48,22 +45,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings' as ActiveView, label: t('nav.settings'), icon: Settings }
   ];
 
-  const percent = Math.round((messageLimitCount / 500000) * 100);
-
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col justify-between border-r transition-transform duration-200 md:static md:translate-x-0 md:w-full md:shadow-none ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       } ${isDark ? 'border-slate-800 bg-slate-950 shadow-2xl shadow-black/20' : 'border-slate-200 bg-white shadow-2xl shadow-slate-200/70'}`}
     >
       <div className="flex min-h-0 flex-col flex-1 overflow-y-auto pt-5">
         <div className={`mb-7 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-5'}`}>
           <div className="flex">
-              <img
-                src={isCollapsed ? favicon : logo}
-                alt="ChatAPI"
-                className={isCollapsed ? 'h-12 object-contain' : 'h-12 object-contain'}
-              />
+            <img
+              src={isCollapsed ? favicon : logo}
+              alt="ChatAPI"
+              className="h-12 object-contain"
+            />
           </div>
 
           <button
@@ -90,9 +85,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 onClick={() => {
                   onViewChange(item.id);
-                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                      onClose?.();
-                    }
+                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    onClose?.();
+                  }
                 }}
                 className={`group flex w-full cursor-pointer items-center rounded-2xl py-3 text-sm font-medium transition-all duration-150 ${
                   isCollapsed ? 'justify-center px-2' : 'gap-3.5 px-4'
@@ -123,34 +118,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {!isCollapsed && (
         <div
-          className={`space-y-4 border-t p-4 transition-colors duration-200 ${
+          className={`border-t p-4 transition-colors duration-200 ${
             isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'
           }`}
         >
-          <div className={`rounded-2xl border p-4 ${isDark ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'}`}>
-            <div className="mb-3 flex items-center justify-between text-xs">
-              <span className={`font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {t('sidebar.plan')} <span className={isDark ? 'font-bold text-white' : 'font-bold text-slate-900'}>Business</span>
-              </span>
-              <button className="text-[11px] font-semibold text-blue-600 underline transition-colors duration-150 hover:text-blue-700">
-                {t('sidebar.upgrade')}
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px] font-medium text-slate-400">
-                <span>{t('sidebar.messages')}</span>
-                <span className={isDark ? 'font-semibold text-slate-200' : 'font-semibold text-slate-700'}>{percent}%</span>
-              </div>
-              <div className={`h-1.5 w-full overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                <div className="h-1.5 rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${percent}%` }} />
-              </div>
-              <div className={`mt-1 font-mono text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                {messageLimitCount.toLocaleString('ru-RU')} / 500 000
-              </div>
-            </div>
-          </div>
-
           <div className={`px-2 text-[11px] font-medium leading-relaxed ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
             <div>© 2025 ChatAPI</div>
             <div className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>

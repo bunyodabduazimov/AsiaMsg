@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -38,32 +38,36 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   const [typeFilter, setTypeFilter] = useState('all');
   const [segment, setSegment] = useState<Segment>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const visibleMessagesSource = useMemo(
+    () => state.messages.filter(message => message.number.toLowerCase() !== 'status@broadcast'),
+    [state.messages]
+  );
 
   const stats = useMemo(() => {
-    const total = state.messages.length;
-    const inbound = state.messages.filter(message => toLower(message.type).includes('вход')).length;
-    const outbound = state.messages.filter(message => toLower(message.type).includes('исход')).length;
-    const errors = state.messages.filter(message => toLower(message.status).includes('ошиб')).length;
+    const total = visibleMessagesSource.length;
+    const inbound = visibleMessagesSource.filter(message => toLower(message.type).includes('РІС…РѕРґ')).length;
+    const outbound = visibleMessagesSource.filter(message => toLower(message.type).includes('РёСЃС…РѕРґ')).length;
+    const errors = visibleMessagesSource.filter(message => toLower(message.status).includes('РѕС€РёР±')).length;
     return { total, inbound, outbound, errors };
-  }, [state.messages]);
+  }, [visibleMessagesSource]);
 
   const instanceOptions = useMemo(() => {
     const names = new Map<string, string>();
     for (const instance of state.instances) {
       names.set(instance.name, instance.name);
     }
-    for (const message of state.messages) {
+    for (const message of visibleMessagesSource) {
       if (!names.has(message.instance)) {
         names.set(message.instance, message.instance);
       }
     }
     return Array.from(names.values());
-  }, [state.instances, state.messages]);
+  }, [state.instances, visibleMessagesSource]);
 
   const filteredMessages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    return state.messages
+    return visibleMessagesSource
       .filter(message => {
         const matchesQuery =
           !query ||
@@ -78,15 +82,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
         const matchesSegment =
           segment === 'all' ||
-          (segment === 'inbound' && toLower(message.type).includes('вход')) ||
-          (segment === 'outbound' && toLower(message.type).includes('исход')) ||
-          (segment === 'errors' && toLower(message.status).includes('ошиб'));
+          (segment === 'inbound' && toLower(message.type).includes('РІС…РѕРґ')) ||
+          (segment === 'outbound' && toLower(message.type).includes('РёСЃС…РѕРґ')) ||
+          (segment === 'errors' && toLower(message.status).includes('РѕС€РёР±'));
 
         return matchesQuery && matchesInstance && matchesStatus && matchesType && matchesSegment;
       })
       .slice()
       .sort((a, b) => b.time.localeCompare(a.time));
-  }, [searchQuery, instanceFilter, statusFilter, typeFilter, segment, state.messages]);
+  }, [searchQuery, instanceFilter, statusFilter, typeFilter, segment, visibleMessagesSource]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMessages.length / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -176,10 +180,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
             >
               <option value="all">{t('messages.status')}</option>
-              <option value="Отправлено">{t('messages.sent')}</option>
-              <option value="Доставлено">{t('messages.delivered')}</option>
-              <option value="Ошибка">{t('common.error')}</option>
-              <option value="В очереди">Queued</option>
+              <option value="РћС‚РїСЂР°РІР»РµРЅРѕ">{t('messages.sent')}</option>
+              <option value="Р”РѕСЃС‚Р°РІР»РµРЅРѕ">{t('messages.delivered')}</option>
+              <option value="РћС€РёР±РєР°">{t('common.error')}</option>
+              <option value="Р’ РѕС‡РµСЂРµРґРё">Queued</option>
             </select>
 
             <select
@@ -188,8 +192,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
             >
               <option value="all">{t('messages.direction')}</option>
-              <option value="Входящее">{t('messages.inbound')}</option>
-              <option value="Исходящее">{t('messages.outbound')}</option>
+              <option value="Р’С…РѕРґСЏС‰РµРµ">{t('messages.inbound')}</option>
+              <option value="РСЃС…РѕРґСЏС‰РµРµ">{t('messages.outbound')}</option>
             </select>
           </div>
 
@@ -239,13 +243,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 <th className="px-5 py-4">{t('nav.instances')}</th>
                 <th className="px-5 py-4">{t('messages.status')}</th>
                 <th className="px-5 py-4">{t('messages.content')}</th>
-                <th className="px-5 py-4">Data</th>
+                <th className="px-5 py-4">Тип</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {visibleMessages.map(message => {
                 const isSelected = state.selectedMessageId === message.id;
-                const isInbound = toLower(message.type).includes('вход');
+                const isInbound = toLower(message.type).includes('РІС…РѕРґ');
                 return (
                   <tr
                     key={message.id}
@@ -270,15 +274,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     </td>
                     <td className="px-5 py-4">
                       <div className="max-w-[320px] text-sm text-slate-700">
-                        <p className="line-clamp-2">{message.messageText}</p>
+                        <p className="line-clamp-2">
+                          {message.messageText || message.attachmentName || message.attachmentType || '—'}
+                        </p>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-500">
-                      {message.attachmentName ? (
-                        <span>{message.attachmentName}</span>
-                      ) : (
-                        <span>—</span>
-                      )}
+                    <td className="px-5 py-4 text-sm text-slate-500 whitespace-nowrap">
+                      <span>{message.contentType || 'other'}</span>
                     </td>
                   </tr>
                 );
@@ -297,7 +299,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
         <div className="flex flex-col gap-4 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm text-slate-400">
-            {`Showing ${visibleMessages.length ? (safePage - 1) * itemsPerPage + 1 : 0}–${Math.min(safePage * itemsPerPage, filteredMessages.length)} of ${filteredMessages.length}`}
+            {`Showing ${visibleMessages.length ? (safePage - 1) * itemsPerPage + 1 : 0}вЂ“${Math.min(safePage * itemsPerPage, filteredMessages.length)} of ${filteredMessages.length}`}
           </span>
 
           <div className="flex items-center gap-2">
@@ -349,13 +351,14 @@ const MetricCard = ({
 
 const StatusPill = ({ value }: { value: string }) => {
   const lower = value.toLowerCase();
-  const className = lower.includes('ошиб')
+  const className = lower.includes('РѕС€РёР±')
     ? 'bg-rose-50 text-rose-700'
-    : lower.includes('достав')
+    : lower.includes('РґРѕСЃС‚Р°РІ')
       ? 'bg-emerald-50 text-emerald-700'
-      : lower.includes('очеред')
+      : lower.includes('РѕС‡РµСЂРµРґ')
         ? 'bg-amber-50 text-amber-700'
         : 'bg-slate-50 text-slate-700';
 
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${className}`}>{value}</span>;
 };
+

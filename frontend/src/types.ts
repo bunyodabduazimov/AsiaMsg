@@ -12,6 +12,10 @@ export interface Instance {
   messagesToday: number;
   qrCode?: string;
   qrExpiresAt?: string;
+  apiKey?: string | null;
+  subscriptionPlan?: string;
+  subscriptionTrialStartedAt?: string | null;
+  subscriptionTrialEndsAt?: string | null;
   webhookUrl?: string;
   webhookRetryCount?: number;
   webhookOnReceived?: boolean;
@@ -30,6 +34,8 @@ export interface Message {
   type: 'Входящее' | 'Исходящее';
   status: 'Доставлено' | 'Отправлено' | 'Ошибка' | 'В очереди';
   time: string;
+  dataDate?: string;
+  contentType?: string;
   messageText: string;
   details?: string;
   attachmentName?: string;
