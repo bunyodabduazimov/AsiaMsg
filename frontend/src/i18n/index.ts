@@ -7,7 +7,7 @@ import ru from './locales/ru.json';
 const STORAGE_KEY = 'chatapi_lang';
 
 const savedLang = localStorage.getItem(STORAGE_KEY);
-const defaultLang = savedLang === 'ru' || savedLang === 'en' ? savedLang : 'en';
+const defaultLang = savedLang === 'ru' || savedLang === 'en' ? savedLang : 'ru';
 
 i18n
   .use(initReactI18next)
@@ -17,7 +17,7 @@ i18n
       ru: { translation: ru }
     },
     lng: defaultLang,
-    fallbackLng: 'en',
+    fallbackLng: 'ru',
     interpolation: {
       escapeValue: false
     }

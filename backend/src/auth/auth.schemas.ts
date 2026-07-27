@@ -12,7 +12,10 @@ export const loginSchema = z.object({
 });
 
 export const googleLoginSchema = z.object({
-  idToken: z.string().min(1)
+  code: z.string().min(1).optional(),
+  idToken: z.string().min(1).optional()
+}).refine(input => Boolean(input.code || input.idToken), {
+  message: 'Either code or idToken is required'
 });
 
 export const refreshSchema = z.object({

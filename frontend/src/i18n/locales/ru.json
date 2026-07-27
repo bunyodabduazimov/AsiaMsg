@@ -63,6 +63,7 @@
     "google": "Войти через Google",
     "googleConnecting": "Подключение Google...",
     "errors": {
+      "requiredField": "Это обязательное поле.",
       "enterEmailAndPassword": "Введите email и пароль.",
       "acceptTermsRequired": "Подтвердите условия использования и политику конфиденциальности.",
       "passwordMinLength": "Пароль должен содержать минимум 8 символов.",
@@ -70,7 +71,9 @@
       "googleClientIdMissing": "Google Sign-In не настроен в переменных frontend.",
       "googleUnavailable": "Google Sign-In временно недоступен.",
       "googleTimeout": "Время ожидания Google Sign-In истекло. Попробуйте снова.",
-      "googleCredentialMissing": "Не удалось получить токен Google."
+      "googleCredentialMissing": "Не удалось получить токен Google.",
+      "googlePopupFailedToOpen": "Не удалось открыть всплывающее окно Google.",
+      "googlePopupClosed": "Всплывающее окно Google было закрыто до завершения входа."
     },
     "tagline": "WhatsApp и бизнес-сообщения",
     "heroTitle": "WhatsApp API для бизнеса",

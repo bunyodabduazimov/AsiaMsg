@@ -151,7 +151,7 @@ export interface BackendRegisterInput extends BackendLoginInput {
 
 export interface BackendGoogleLoginInput {
   apiBaseUrl: string;
-  idToken: string;
+  code: string;
 }
 
 export interface BackendConnectionInfo {
@@ -326,8 +326,11 @@ export const registerToBackend = (input: BackendRegisterInput) =>
 export const loginWithGoogleToBackend = (input: BackendGoogleLoginInput) =>
   fetchJson<AuthSession>(input.apiBaseUrl, '/api/auth/google', {
     method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest'
+    },
     body: JSON.stringify({
-      idToken: input.idToken
+      code: input.code
     })
   });
 

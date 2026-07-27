@@ -50,7 +50,26 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const payload = parsed;
-  const result = await authService.loginWithGoogle(payload.idToken);
+  if (payload.code) {
+    const origin = req.get('origin')?.trim();
+    const requestedWith = req.get('x-requested-with');
+
+    if (!origin) {
+      res.status(400).json({ message: 'Google authorization origin is missing' });
+      return;
+    }
+
+    if (requestedWith !== 'XMLHttpRequest') {
+      res.status(400).json({ message: 'Google authorization request is missing required headers' });
+      return;
+    }
+
+    const result = await authService.loginWithGoogleCode(payload.code, origin);
+    res.json(result);
+    return;
+  }
+
+  const result = await authService.loginWithGoogle(payload.idToken!);
   res.json(result);
 });
 

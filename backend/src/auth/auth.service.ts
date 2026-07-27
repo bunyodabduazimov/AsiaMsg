@@ -55,6 +55,50 @@ export class AuthService {
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
+    const payload = await this.verifyGoogleIdToken(idToken);
+    return this.loginOrCreateGoogleUser(payload);
+  }
+
+  async loginWithGoogleCode(code: string, redirectUri: string): Promise<AuthResponse> {
+    if (!env.GOOGLE_CLIENT_ID) {
+      throw new AppError('Google Sign-In is not configured on server', 500);
+    }
+
+    if (!env.GOOGLE_CLIENT_SECRET) {
+      throw new AppError('Google Sign-In is not configured on server', 500);
+    }
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      }).toString()
+    });
+
+    if (!tokenResponse.ok) {
+      throw new AppError(await this.readGoogleTokenError(tokenResponse), 401);
+    }
+
+    const tokenPayload = (await tokenResponse.json()) as {
+      id_token?: string;
+    };
+
+    if (!tokenPayload.id_token) {
+      throw new AppError('Google ID token was not returned', 401);
+    }
+
+    const payload = await this.verifyGoogleIdToken(tokenPayload.id_token);
+    return this.loginOrCreateGoogleUser(payload);
+  }
+
+  private async verifyGoogleIdToken(idToken: string) {
     if (!env.GOOGLE_CLIENT_ID) {
       throw new AppError('Google Sign-In is not configured on server', 500);
     }
@@ -90,6 +134,11 @@ export class AuthService {
       throw new AppError('Google account email is not verified', 401);
     }
 
+    return { email, name };
+  }
+
+  private async loginOrCreateGoogleUser(payload: { email: string; name: string | undefined }): Promise<AuthResponse> {
+    const { email, name } = payload;
     let user = await this.authRepository.findUserByEmail(email);
     if (!user) {
       const generatedPasswordHash = await bcrypt.hash(`${email}:${Date.now()}`, 12);
@@ -101,6 +150,23 @@ export class AuthService {
     }
 
     return this.issueTokensForUser(user);
+  }
+
+  private async readGoogleTokenError(response: Response) {
+    try {
+      const payload = (await response.json()) as {
+        error?: string;
+        error_description?: string;
+      };
+
+      if (payload.error_description) return payload.error_description;
+      if (payload.error === 'invalid_grant') return 'Invalid Google authorization code';
+      if (payload.error) return `Google authorization code exchange failed: ${payload.error}`;
+    } catch {
+      // ignore parsing issues and fall through to the fallback message
+    }
+
+    return 'Google authorization code exchange failed';
   }
 
   async refresh(input: RefreshInput): Promise<AuthResponse> {

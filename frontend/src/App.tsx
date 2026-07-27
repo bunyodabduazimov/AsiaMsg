@@ -105,6 +105,70 @@ const isAuthSessionError = (error: unknown) => {
   return error.status === 404 && /user not found/i.test(error.message);
 };
 
+const localizeAuthError = (message: string, language: 'RU' | 'EN') => {
+  if (language !== 'RU') return message;
+
+  const normalized = message.trim().toLowerCase();
+
+  if (normalized === 'account not found or wrong password') {
+    return 'Аккаунт не найден или пароль неверный.';
+  }
+
+  if (normalized === 'account already exists. please sign in.') {
+    return 'Аккаунт уже существует. Пожалуйста, войдите.';
+  }
+
+  if (normalized === 'invalid google token') {
+    return 'Неверный токен Google.';
+  }
+
+  if (normalized === 'google token audience mismatch') {
+    return 'Токен Google не подходит для этого приложения.';
+  }
+
+  if (normalized === 'google token expired') {
+    return 'Токен Google истёк.';
+  }
+
+  if (normalized === 'google account email is not verified') {
+    return 'Email Google-аккаунта не подтверждён.';
+  }
+
+  if (normalized === 'google sign-in is not configured on server') {
+    return 'Вход через Google не настроен на сервере.';
+  }
+
+  if (normalized === 'google authorization code exchange failed') {
+    return 'Не удалось обменять код авторизации Google.';
+  }
+
+  if (normalized === 'invalid google authorization code') {
+    return 'Недействительный код авторизации Google.';
+  }
+
+  if (normalized === 'google id token was not returned') {
+    return 'Google не вернул ID token.';
+  }
+
+  if (normalized === 'google authorization origin is missing') {
+    return 'Не удалось определить origin для авторизации Google.';
+  }
+
+  if (normalized === 'google authorization request is missing required headers') {
+    return 'Запрос авторизации Google не содержит нужные заголовки.';
+  }
+
+  if (normalized === 'invalid refresh token') {
+    return 'Недействительный refresh token.';
+  }
+
+  if (normalized === 'unauthorized') {
+    return 'Неавторизованный доступ.';
+  }
+
+  return message;
+};
+
 const getViewFromPath = (path: string): ActiveView => {
   if (path === '/instances' || path.startsWith('/instances/')) {
     return 'instances';
@@ -674,7 +738,9 @@ export function App() {
       });
       await handleBackendSession(normalizedBaseUrl, session.accessToken, session.refreshToken);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to login';
+      const message = error instanceof Error
+        ? localizeAuthError(error.message, state.language)
+        : (state.language === 'RU' ? 'Не удалось войти.' : 'Failed to login');
       setBackendError(message);
       setBackendStatus('error');
       triggerToast(message);
@@ -694,25 +760,29 @@ export function App() {
       });
       await handleBackendSession(normalizedBaseUrl, session.accessToken, session.refreshToken);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to register';
+      const message = error instanceof Error
+        ? localizeAuthError(error.message, state.language)
+        : (state.language === 'RU' ? 'Не удалось зарегистрироваться.' : 'Failed to register');
       setBackendError(message);
       setBackendStatus('error');
       triggerToast(message);
     }
   };
 
-  const handleBackendGoogleLogin = async (baseUrl: string, idToken: string) => {
+  const handleBackendGoogleLogin = async (baseUrl: string, code: string) => {
     setBackendStatus('loading');
     setBackendError(null);
     const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
     try {
       const session = await loginWithGoogleToBackend({
         apiBaseUrl: normalizedBaseUrl,
-        idToken
+        code
       });
       await handleBackendSession(normalizedBaseUrl, session.accessToken, session.refreshToken);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to login with Google';
+      const message = error instanceof Error
+        ? localizeAuthError(error.message, state.language)
+        : (state.language === 'RU' ? 'Не удалось войти через Google.' : 'Failed to login with Google');
       setBackendError(message);
       setBackendStatus('error');
       triggerToast(message);
@@ -1274,8 +1344,8 @@ export function App() {
         onLogin={async (email, password) => {
           await handleBackendLogin(apiBaseUrl, email, password);
         }}
-        onGoogleLogin={async (idToken) => {
-          await handleBackendGoogleLogin(apiBaseUrl, idToken);
+        onGoogleLogin={async (code) => {
+          await handleBackendGoogleLogin(apiBaseUrl, code);
         }}
         onRegister={async (input) => {
           await handleBackendRegister(apiBaseUrl, input.name, input.email, input.password);
@@ -1299,7 +1369,7 @@ export function App() {
       {renderViewContent()}
 
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 shadow-xl shadow-slate-200/70">
+        <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 shadow-xl shadow-slate-200/70 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:shadow-slate-950/40">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
             ✓
           </div>
@@ -1309,37 +1379,37 @@ export function App() {
 
       {showAddNumberModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]">
-          <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
             <button
               onClick={() => {
                 if (!pendingAction) setShowAddNumberModal(false);
               }}
               disabled={pendingAction !== null}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-slate-900 dark:hover:text-slate-200"
             >
               ×
             </button>
 
-            <div className="mb-5 flex items-center gap-2.5 border-b border-slate-100 pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <div className="mb-5 flex items-center gap-2.5 border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
                 <Smartphone className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">Добавить WhatsApp номер</h3>
-                <p className="mt-0.5 text-[10px] text-slate-400">Интеграция нового канала связи</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Добавить WhatsApp номер</h3>
+                <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">Интеграция нового канала связи</p>
               </div>
             </div>
 
             <form onSubmit={handleAddNumberSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase text-slate-400">Название инстанса</label>
+                <label className="block text-xs font-bold uppercase text-slate-400 dark:text-slate-500">Название инстанса</label>
                 <input
                   type="text"
                   required
                   value={newNumName}
                   onChange={(e) => setNewNumName(e.target.value)}
                   placeholder="Например, Sales Bot"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:bg-slate-900"
                 />
               </div>
 
@@ -1348,14 +1418,14 @@ export function App() {
                   type="button"
                   onClick={() => setShowAddNumberModal(false)}
                   disabled={pendingAction !== null}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
                   disabled={pendingAction !== null}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-600 dark:hover:bg-sky-500"
                 >
                   <Plus className="h-4 w-4" />
                   <span>{pendingAction === 'instance:create' ? 'Подключение...' : 'Подключить'}</span>
