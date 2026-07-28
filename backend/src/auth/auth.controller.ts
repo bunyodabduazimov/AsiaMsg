@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { asyncHandler } from '../utils/async-handler';
-import { googleLoginSchema, loginSchema, logoutSchema, refreshSchema, registerSchema } from './auth.schemas';
+import { changePasswordSchema, googleLoginSchema, loginSchema, logoutSchema, refreshSchema, registerSchema } from './auth.schemas';
 import { AuthService } from './auth.service';
 
 const authService = new AuthService();
@@ -39,6 +39,18 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
   const payload = parsed;
   const result = await authService.login(payload);
+  res.json(result);
+});
+
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = parseSchema(changePasswordSchema, req.body);
+  if ('error' in parsed) {
+    res.status(400).json({ message: parsed.error.issues });
+    return;
+  }
+
+  const payload = parsed;
+  const result = await authService.changePassword(req.authUser!.id, payload.currentPassword, payload.newPassword);
   res.json(result);
 });
 

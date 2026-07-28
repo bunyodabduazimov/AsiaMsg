@@ -154,6 +154,12 @@ export interface BackendGoogleLoginInput {
   code: string;
 }
 
+export interface BackendChangePasswordInput {
+  apiBaseUrl: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface BackendConnectionInfo {
   apiBaseUrl: string;
   accessToken: string | null;
@@ -333,6 +339,15 @@ export const loginWithGoogleToBackend = (input: BackendGoogleLoginInput) =>
       code: input.code
     })
   });
+
+export const changePasswordToBackend = (input: BackendChangePasswordInput, accessToken: string) =>
+  fetchJson<AuthSession>(input.apiBaseUrl, '/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      currentPassword: input.currentPassword,
+      newPassword: input.newPassword
+    })
+  }, accessToken);
 
 export const fetchCurrentUser = (apiBaseUrl: string, accessToken: string) =>
   fetchJson<BackendUser>(apiBaseUrl, '/api/auth/me', {}, accessToken);

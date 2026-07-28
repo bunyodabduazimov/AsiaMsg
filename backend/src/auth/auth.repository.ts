@@ -14,6 +14,25 @@ export class AuthRepository {
     return prisma.user.findUnique({ where: { id } });
   }
 
+  updateUserPassword(id: string, passwordHash: string) {
+    return prisma.user.update({
+      where: { id },
+      data: { passwordHash }
+    });
+  }
+
+  revokeActiveRefreshTokensByUserId(userId: string) {
+    return prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        revokedAt: null
+      },
+      data: {
+        revokedAt: new Date()
+      }
+    });
+  }
+
   createRefreshToken(data: Prisma.RefreshTokenCreateInput) {
     return prisma.refreshToken.create({ data });
   }

@@ -94,6 +94,7 @@ export const Layout: React.FC<LayoutProps> = ({
             onThemeChange={onThemeChange}
             onMenuClick={onToggleSidebar}
             onLogout={onLogout}
+            onViewChange={onViewChange}
           />
 
           {/* Scrollable page body */}

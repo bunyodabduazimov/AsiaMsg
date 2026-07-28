@@ -28,6 +28,9 @@ export class InstanceService {
         instance: {
           userId
         },
+        remoteJid: {
+          not: 'status@broadcast'
+        },
         createdAt: {
           gte: startOfDay
         }

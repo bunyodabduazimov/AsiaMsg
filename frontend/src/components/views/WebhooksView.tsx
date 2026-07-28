@@ -169,10 +169,10 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-950">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
             {isRu ? 'Webhooks' : 'Webhooks'}
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             {isRu
               ? 'Настройка URL для получения событий WhatsApp из ChatAPI.'
               : 'Configure URLs that receive WhatsApp events from ChatAPI.'}
@@ -209,14 +209,14 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="relative mb-4">
             <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
             <input
               value={searchQuery}
               onChange={event => setSearchQuery(event.target.value)}
               placeholder={isRu ? 'Поиск по URL или инстансу...' : 'Search URL or instance...'}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-950"
             />
           </div>
 
@@ -230,21 +230,21 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                   onClick={() => onSelectWebhook(webhook.id)}
                   className={`w-full rounded-2xl border p-4 text-left transition ${
                     isSelected
-                      ? 'border-blue-200 bg-blue-50'
-                      : 'border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50'
+                    ? 'border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20'
+                      : 'border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700 dark:hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-950">{webhook.instance || webhook.instanceId}</p>
-                      <p className="mt-1 truncate text-xs text-slate-400">
+                      <p className="font-bold text-slate-950 dark:text-slate-100">{webhook.instance || webhook.instanceId}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400 dark:text-slate-500">
                         {webhook.endpoint || (isRu ? 'URL не настроен' : 'URL is not configured')}
                       </p>
                     </div>
                     <StatusDot active={Boolean(webhook.active)} />
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-xs">
-                    <span className="rounded-lg bg-emerald-50 px-2 py-1 font-bold text-emerald-700">POST</span>
+                    <span className="rounded-lg bg-emerald-50 px-2 py-1 font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">POST</span>
                     <button
                       type="button"
                       onClick={event => {
@@ -253,8 +253,8 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                       }}
                       className={`rounded-lg px-3 py-1 font-bold ${
                         webhook.active
-                          ? 'bg-rose-50 text-rose-600'
-                          : 'bg-blue-50 text-blue-600'
+                          ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300'
+                          : 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300'
                       }`}
                     >
                       {webhook.active ? (isRu ? 'Отключить' : 'Disable') : (isRu ? 'Настроить' : 'Configure')}
@@ -265,7 +265,7 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
             })}
 
             {!filteredWebhooks.length && (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-semibold text-slate-400">
+              <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500">
                 {isRu ? 'Webhook настройки не найдены' : 'No webhook settings found'}
               </div>
             )}
@@ -273,20 +273,20 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
         </section>
 
         <section className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Webhook</p>
-                <h2 className="mt-2 text-xl font-bold text-slate-950">
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500">Webhook</p>
+                <h2 className="mt-2 text-xl font-bold text-slate-950 dark:text-white">
                   {selectedInstance?.name || selectedWebhook?.instance || (isRu ? 'Инстанс не выбран' : 'No instance selected')}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   {selectedWebhook?.instanceId || (isRu ? 'Выберите инстанс слева.' : 'Select an instance on the left.')}
                 </p>
               </div>
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/40">
                 <StatusDot active={Boolean(selectedWebhook?.active)} />
-                <span className="text-sm font-bold text-slate-800">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
                   {selectedWebhook?.active ? (isRu ? 'Активен' : 'Active') : (isRu ? 'Не настроен' : 'Not configured')}
                 </span>
               </div>
@@ -294,14 +294,14 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
 
             <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
               <label className="block">
-                <span className="text-sm font-bold text-slate-800">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
                   {isRu ? 'URL веб-перехватчика' : 'Webhook URL'}
                 </span>
                 <input
                   value={draft.webhookUrl}
                   onChange={event => setDraft(prev => ({ ...prev, webhookUrl: event.target.value }))}
                   placeholder="https://example.com/webhook"
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-950"
                 />
               </label>
 
@@ -315,7 +315,7 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                   max={10}
                   value={draft.webhookRetryCount}
                   onChange={event => setDraft(prev => ({ ...prev, webhookRetryCount: Number(event.target.value) }))}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-950"
                 />
               </label>
             </div>
@@ -328,17 +328,17 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                 {eventOptions.map(option => (
                   <label
                     key={option.key}
-                    className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/50"
                   >
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{isRu ? option.labelRu : option.labelEn}</p>
-                      <p className="mt-1 font-mono text-xs text-slate-400">{option.event}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{isRu ? option.labelRu : option.labelEn}</p>
+                      <p className="mt-1 font-mono text-xs text-slate-400 dark:text-slate-500">{option.event}</p>
                     </div>
                     <input
                       type="checkbox"
                       checked={draft[option.key]}
                       onChange={() => setDraft(prev => ({ ...prev, [option.key]: !prev[option.key] }))}
-                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600"
                     />
                   </label>
                 ))}
@@ -350,7 +350,7 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                 type="button"
                 onClick={saveDraft}
                 disabled={!selectedWebhook || actionLoading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 {actionLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 {isRu ? 'Сохранить настройки' : 'Save settings'}
@@ -359,7 +359,7 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                 type="button"
                 onClick={sendTestEvent}
                 disabled={!draft.webhookUrl.trim() || testLoading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 {testLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {isRu ? 'Отправить тест' : 'Send test'}
@@ -368,7 +368,7 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
                 type="button"
                 onClick={() => copyText(draft.webhookUrl, 'url')}
                 disabled={!draft.webhookUrl.trim()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 {copiedField === 'url' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                 {isRu ? 'Копировать URL' : 'Copy URL'}
@@ -377,47 +377,47 @@ export const WebhooksView: React.FC<WebhooksViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-slate-950">
+                  <h3 className="text-base font-bold text-slate-950 dark:text-white">
                     {isRu ? 'Результат теста' : 'Test result'}
                   </h3>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                     {isRu ? 'Ответ внешнего endpoint после тестовой отправки.' : 'External endpoint response after test request.'}
                   </p>
                 </div>
               </div>
               <pre className={`min-h-44 overflow-auto rounded-2xl p-4 text-xs ${
-                testResult?.ok ? 'bg-emerald-950 text-emerald-100' : 'bg-slate-950 text-cyan-100'
+                testResult?.ok ? 'bg-emerald-950 text-emerald-100' : 'bg-slate-950 text-cyan-100 dark:bg-slate-950 dark:text-cyan-100'
               }`}>
                 {testResult?.text || (isRu ? 'Нажмите “Отправить тест”, чтобы увидеть ответ.' : 'Click “Send test” to see the response.')}
               </pre>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-base font-bold text-slate-950">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="text-base font-bold text-slate-950 dark:text-white">
                 {isRu ? 'Последние доставки' : 'Recent deliveries'}
               </h3>
               <div className="mt-4 space-y-3">
                 {latestDeliveries.map(delivery => (
-                  <div key={delivery.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div key={delivery.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-mono text-xs font-bold text-slate-500">{delivery.event}</span>
                       <span className={`rounded-lg px-2 py-1 text-xs font-bold ${
                         delivery.status >= 200 && delivery.status < 300
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-rose-50 text-rose-700'
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300'
                       }`}>
                         {delivery.status || '—'}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-slate-400">{delivery.time} · {delivery.speed}</p>
+                    <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{delivery.time} · {delivery.speed}</p>
                   </div>
                 ))}
 
                 {!latestDeliveries.length && (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-semibold text-slate-400">
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500">
                     {isRu ? 'Доставок пока нет' : 'No deliveries yet'}
                   </div>
                 )}
@@ -439,12 +439,12 @@ const MetricCard = ({
   label: string;
   value: number | string;
 }) => (
-  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div className="flex items-center justify-between">
-      <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">{icon}</div>
-      <span className="text-2xl font-bold text-slate-950">{value}</span>
+      <div className="rounded-2xl bg-blue-50 p-3 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300">{icon}</div>
+      <span className="text-2xl font-bold text-slate-950 dark:text-white">{value}</span>
     </div>
-    <p className="mt-4 text-sm font-semibold text-slate-500">{label}</p>
+    <p className="mt-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
   </div>
 );
 

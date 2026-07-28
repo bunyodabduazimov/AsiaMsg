@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Search,
   Bell,
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '../i18n';
-import { AppState } from '../types';
+import { ActiveView, AppState } from '../types';
 
 interface TopbarProps {
   state: AppState;
@@ -25,6 +25,7 @@ interface TopbarProps {
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   onMenuClick: () => void;
   onLogout: () => void;
+  onViewChange: (view: ActiveView) => void;
 }
 
 type DropdownKey = 'language' | 'theme' | 'notifications' | null;
@@ -35,9 +36,11 @@ export const Topbar: React.FC<TopbarProps> = ({
   onLanguageChange,
   onThemeChange,
   onMenuClick,
-  onLogout
+  onLogout,
+  onViewChange
 }) => {
   const { t } = useTranslation();
+  const topbarRef = useRef<HTMLElement | null>(null);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -49,13 +52,43 @@ export const Topbar: React.FC<TopbarProps> = ({
 
   const closeDropdowns = () => setOpenDropdown(null);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      if (topbarRef.current && !topbarRef.current.contains(target)) {
+        setShowProfileMenu(false);
+        setOpenDropdown(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowProfileMenu(false);
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   const toggleDropdown = (key: DropdownKey) => {
     setShowProfileMenu(false);
     setOpenDropdown(prev => (prev === key ? null : key));
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950/95 sm:px-6 lg:px-8">
+    <header
+      ref={topbarRef}
+      className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950/95 sm:px-6 lg:px-8"
+    >
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -249,15 +282,23 @@ export const Topbar: React.FC<TopbarProps> = ({
                       {t('topbar.notifications')}
                     </span>
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
-                      {state.notificationCount} New
+                      {state.notificationCount} {state.language === 'RU' ? 'Новые' : 'New'}
                     </span>
                   </div>
                   <div className="space-y-3 pt-3">
                     {mockNotifications.map((n) => (
-                      <div key={n.id} className="flex flex-col gap-1 border-b border-slate-100 pb-2 last:border-b-0 dark:border-slate-800">
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          closeDropdowns();
+                          onViewChange('logs');
+                        }}
+                        className="flex w-full flex-col gap-1 rounded-xl border-b border-slate-100 px-2 py-2 text-left transition hover:bg-slate-50 last:border-b-0 dark:border-slate-800 dark:hover:bg-slate-900"
+                      >
                         <p className="text-xs text-slate-600 dark:text-slate-300">{n.text}</p>
                         <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{n.time}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -301,15 +342,36 @@ export const Topbar: React.FC<TopbarProps> = ({
                   </div>
 
                   <div className="space-y-0.5 p-1">
-                    <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onViewChange('settings');
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900"
+                    >
                       <User className="h-4 w-4 text-slate-400" />
                       {t('settings.profile')}
                     </button>
-                    <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onViewChange('settings');
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900"
+                    >
                       <ShieldCheck className="h-4 w-4 text-slate-400" />
                       {t('settings.security')}
                     </button>
-                    <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onViewChange('tokens');
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900"
+                    >
                       <MessageSquareCode className="h-4 w-4 text-slate-400" />
                       {t('nav.apiDocs')}
                     </button>

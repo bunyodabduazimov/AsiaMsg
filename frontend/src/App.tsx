@@ -33,6 +33,7 @@ import {
   fetchInstances,
   fetchDashboard,
   getDefaultApiBaseUrl,
+  changePasswordToBackend,
   loginToBackend,
   loginWithGoogleToBackend,
   normalizeApiBaseUrl,
@@ -116,6 +117,10 @@ const localizeAuthError = (message: string, language: 'RU' | 'EN') => {
 
   if (normalized === 'account already exists. please sign in.') {
     return 'Аккаунт уже существует. Пожалуйста, войдите.';
+  }
+
+  if (normalized === 'current password is incorrect') {
+    return 'Текущий пароль введён неверно.';
   }
 
   if (normalized === 'invalid google token') {
@@ -970,6 +975,31 @@ export function App() {
     }
   };
 
+  const handleChangePassword = async (currentPassword: string, newPassword: string) => {
+    if (!accessToken) {
+      const message = state.language === 'RU'
+        ? 'Сессия устарела. Войдите заново.'
+        : 'Session expired. Please sign in again.';
+      throw new Error(message);
+    }
+
+    try {
+      const session = await changePasswordToBackend({
+        apiBaseUrl,
+        currentPassword,
+        newPassword
+      }, accessToken);
+      await handleBackendSession(apiBaseUrl, session.accessToken, session.refreshToken);
+      triggerToast(state.language === 'RU' ? 'Пароль изменён' : 'Password updated');
+    } catch (error) {
+      const message = error instanceof Error
+        ? localizeAuthError(error.message, state.language)
+        : (state.language === 'RU' ? 'Не удалось изменить пароль.' : 'Failed to change password');
+      triggerToast(message);
+      throw new Error(message);
+    }
+  };
+
   const handleLogoutInstance = async (id: string) => {
     if (pendingAction) return;
     if (!accessToken) {
@@ -1321,12 +1351,7 @@ export function App() {
             onUpdateProfile={handleUpdateProfile}
             onUpdateLanguage={handleLanguageChange}
             onUpdateTheme={handleThemeChange}
-            backendStatus={backendStatus}
-            backendError={backendError}
-            backendUser={backendUser}
-            onBackendLogin={(email, password) => handleBackendLogin(apiBaseUrl, email, password)}
-            onBackendRegister={(name, email, password) => handleBackendRegister(apiBaseUrl, name, email, password)}
-            onBackendDisconnect={handleBackendDisconnect}
+            onChangePassword={handleChangePassword}
           />
         );
       default:

@@ -11,6 +11,11 @@ export const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(72)
+});
+
 export const googleLoginSchema = z.object({
   code: z.string().min(1).optional(),
   idToken: z.string().min(1).optional()

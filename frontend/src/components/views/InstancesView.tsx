@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  CreditCard,
   ExternalLink,
   Loader2,
   MoreVertical,
@@ -80,6 +81,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null);
   const [deletingInstance, setDeletingInstance] = useState<Instance | null>(null);
   const [logoutingInstance, setLogoutingInstance] = useState<Instance | null>(null);
+  const [subscriptionInstance, setSubscriptionInstance] = useState<Instance | null>(null);
   const [editName, setEditName] = useState('');
   const [webhookDraft, setWebhookDraft] = useState<WebhookSettingsDraft>({
     webhookUrl: '',
@@ -154,7 +156,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     if (actionLoading) return;
     const rect = triggerEl.getBoundingClientRect();
     const menuWidth = 224;
-    const menuHeight = 168;
+    const menuHeight = 214;
     const canOpenDown = rect.bottom + menuHeight + 12 <= window.innerHeight;
     const top = canOpenDown
       ? Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 8)
@@ -252,9 +254,20 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
     closeActions();
   };
 
+  const openSubscriptionDialog = (instance: Instance) => {
+    if (actionLoading) return;
+    setSubscriptionInstance(instance);
+    closeActions();
+  };
+
   const closeLogoutDialog = () => {
     if (actionLoading) return;
     setLogoutingInstance(null);
+  };
+
+  const closeSubscriptionDialog = () => {
+    if (actionLoading) return;
+    setSubscriptionInstance(null);
   };
 
   const confirmLogout = () => {
@@ -309,7 +322,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             <button
               type="button"
               onClick={() => onSelectInstance(null)}
-              className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <ChevronLeft className="h-4 w-4" />
               {t('common.back')}
@@ -338,7 +351,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 type="button"
                 onClick={() => onRefreshInstance(selectedInstance.id)}
                 disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 <RefreshCw className="h-4 w-4" />
                 {t('instances.refresh')}
@@ -348,7 +361,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             <div className="mt-5 grid gap-5 lg:grid-cols-[260px_1fr] lg:items-center">
               <div className="flex w-full justify-center">
                 {selectedInstance.qrCode ? (
-                  <div className="flex min-h-48 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm sm:h-56 sm:w-56">
+                  <div className="flex min-h-48 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:h-56 sm:w-56">
                     <img
                       src={selectedInstance.qrCode}
                       alt="WhatsApp QR code"
@@ -365,7 +378,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="flex min-h-40 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 px-5 py-6 text-center text-blue-700 sm:h-56 sm:w-56">
+                  <div className="flex min-h-40 w-full max-w-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 px-5 py-6 text-center text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200 sm:h-56 sm:w-56">
                     <QrCode className="h-14 w-14 sm:h-20 sm:w-20" />
                     <div className="text-sm font-bold leading-5">
                       {t('instances.clickToConnect')}
@@ -421,7 +434,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 disabled={actionLoading}
                 className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   isConnected
-                    ? 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50'
+                    ? 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/40 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/20'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
               >
@@ -439,7 +452,7 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
                 type="button"
                 onClick={() => openLogoutDialog(selectedInstance)}
                 disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-900/40 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-amber-950/20"
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareDashedMousePointer className="h-4 w-4" />}
                 {t('instances.logout')}
@@ -763,6 +776,14 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
               >
                 <div className="p-2">
                   <MenuItem
+                    label={isRu ? 'Подписка' : 'Subscription'}
+                    icon={<CreditCard className="h-4 w-4" />}
+                    onClick={() => {
+                      openSubscriptionDialog(openMenuInstance);
+                    }}
+                    disabled={actionLoading}
+                  />
+                  <MenuItem
                     label={isRu ? 'Детали' : 'Details'}
                     icon={<ExternalLink className="h-4 w-4" />}
                     onClick={() => {
@@ -904,6 +925,109 @@ export const InstancesView: React.FC<InstancesViewProps> = ({
             document.body
           )
         : null}
+      {subscriptionInstance && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <button
+                type="button"
+                aria-label="Close subscription dialog"
+                className="absolute inset-0 cursor-default bg-transparent"
+                onClick={closeSubscriptionDialog}
+              />
+              <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4 dark:border-slate-800">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+                      {isRu ? 'Управление подпиской' : 'Subscription management'}
+                    </p>
+                    <h2 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+                      {subscriptionInstance.name}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {subscriptionInstance.number}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeSubscriptionDialog}
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Закрыть' : 'Close'}
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      {isRu ? 'Текущий тариф' : 'Current plan'}
+                    </div>
+                    <div className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                      {subscriptionInstance.subscriptionPlan === 'Unlimited'
+                        ? (isRu ? 'Безлимит' : 'Unlimited')
+                        : (subscriptionInstance.subscriptionPlan || (isRu ? 'Безлимит' : 'Unlimited'))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      {isRu ? 'Пробный период' : 'Trial period'}
+                    </div>
+                    <div className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                      {subscriptionInstance.subscriptionTrialEndsAt
+                        ? new Date(subscriptionInstance.subscriptionTrialEndsAt).toLocaleDateString(isRu ? 'ru-RU' : 'en-US', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          })
+                        : (isRu ? 'Не активен' : 'Not active')}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      {isRu ? 'Статус' : 'Status'}
+                    </div>
+                    <div className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                      {subscriptionInstance.status}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
+                  {isRu
+                    ? 'Здесь можно будет подключить оплату, продление и смену тарифа. Сейчас окно показывает текущую подписку и готово для подключения платежного сценария.'
+                    : 'This window is ready for payment, renewal, and plan changes. For now it shows the current subscription details.'}
+                </div>
+
+                <div className="mt-5 flex flex-wrap justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Сменить тариф' : 'Change plan'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {isRu ? 'Продлить' : 'Renew'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isRu ? 'Оплатить' : 'Pay'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {logoutingInstance && typeof document !== 'undefined'
         ? createPortal(
             <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6">
@@ -966,15 +1090,15 @@ type InfoCardProps = {
 };
 
 const InfoCard: React.FC<InfoCardProps> = ({ label, value, copied, onCopy }) => (
-  <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-    <div className="text-xs font-semibold text-slate-400">{label}</div>
+  <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/50">
+    <div className="text-xs font-semibold text-slate-400 dark:text-slate-500">{label}</div>
     <div className="mt-1 flex items-center justify-between gap-3">
-      <div className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-900">{value}</div>
+      <div className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</div>
       {onCopy && (
         <button
           type="button"
           onClick={onCopy}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-blue-600"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-400"
         >
           {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
         </button>

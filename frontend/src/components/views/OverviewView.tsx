@@ -35,10 +35,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const reconnectingCount = state.instances.filter(i => i.status === 'Reconnecting').length;
   const disconnectedCount = state.instances.filter(i => i.status === 'Disconnected').length;
   const totalCount = state.instances.length;
-  const totalMessages = state.messages.length;
+  const visibleMessages = state.messages.filter(message => message.number.toLowerCase() !== 'status@broadcast');
+  const totalMessages = visibleMessages.length;
   const sentTodayCount = state.instances.reduce((sum, instance) => sum + instance.messagesToday, 0);
-  const deliveredCount = state.messages.filter(message => message.status === 'Доставлено').length;
-  const errorCount = state.messages.filter(message => message.status === 'Ошибка').length;
+  const deliveredCount = visibleMessages.filter(message => message.status === 'Доставлено').length;
+  const errorCount = visibleMessages.filter(message => message.status === 'Ошибка').length;
   const formatCount = (value: number) => value.toLocaleString('ru-RU');
   const getPercent = (value: number) => (totalCount > 0 ? (value / totalCount) * 100 : 0);
 
@@ -324,7 +325,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60 text-gray-700 dark:text-slate-300">
-                  {state.messages.slice(0, 5).map((msg) => (
+                  {visibleMessages.slice(0, 5).map((msg) => (
                     <tr key={msg.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-850/30 transition-colors duration-100">
                       <td className="py-3 font-medium flex items-center gap-2">
                         <MessageSquare className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />

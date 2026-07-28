@@ -54,6 +54,24 @@ export class AuthService {
     return this.issueTokensForUser(user);
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<AuthResponse> {
+    const user = await this.authRepository.findUserById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new AppError('Current password is incorrect', 401);
+    }
+
+    const nextPasswordHash = await bcrypt.hash(newPassword, 12);
+    await this.authRepository.revokeActiveRefreshTokensByUserId(userId);
+    const updatedUser = await this.authRepository.updateUserPassword(userId, nextPasswordHash);
+
+    return this.issueTokensForUser(updatedUser);
+  }
+
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
     const payload = await this.verifyGoogleIdToken(idToken);
     return this.loginOrCreateGoogleUser(payload);
