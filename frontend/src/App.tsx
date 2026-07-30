@@ -514,7 +514,7 @@ export function App() {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof ApiError && error.status === 401) {
-          handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+          handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         }
       } finally {
         inFlight = false;
@@ -931,10 +931,10 @@ export function App() {
         instances: prev.instances.map(item => (item.id === id ? updated : item)),
         selectedInstanceId: id
       }));
-      triggerToast(state.language === 'RU' ? 'QR-РєРѕРґ РѕР±РЅРѕРІР»С‘РЅ. Р”РµР№СЃС‚РІРёС‚РµР»РµРЅ 60 СЃРµРєСѓРЅРґ.' : 'QR code refreshed. Valid for 60 seconds.');
+      triggerToast(state.language === 'RU' ? 'QR-код обновлён. Действителен 60 секунд.' : 'QR code refreshed. Valid for 60 seconds.');
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         return;
       }
       const message = error instanceof Error ? error.message : 'Failed to get QR';
@@ -946,7 +946,7 @@ export function App() {
 
   const handleRefreshInstance = async (id: string) => {
     if (!accessToken) {
-      handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР». Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+      handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
       return;
     }
 
@@ -966,7 +966,7 @@ export function App() {
       }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        handleAuthRequired(state.language === 'RU' ? 'РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР». Р’РѕР№РґРёС‚Рµ Р·Р°РЅРѕРІРѕ.' : 'Session expired. Please sign in again.');
+        handleAuthRequired(state.language === 'RU' ? 'Сессия устарела. Войдите заново.' : 'Session expired. Please sign in again.');
         return;
       }
 

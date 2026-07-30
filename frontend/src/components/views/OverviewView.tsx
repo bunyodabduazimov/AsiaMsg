@@ -342,12 +342,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
           </div>
 
-          <button
+          {/* <button
             onClick={() => onViewChange('messages')}
             className="w-full border-t border-gray-50 dark:border-slate-800 text-center pt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline transition-colors mt-4 cursor-pointer"
           >
                         {t('overview.recentMessages')} →
-          </button>
+          </button> */}
         </div>
 
         {/* Last Webhooks Dispatch box */}

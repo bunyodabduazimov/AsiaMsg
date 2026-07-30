@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'overview' as ActiveView, label: t('nav.overview'), icon: LayoutDashboard },
     { id: 'instances' as ActiveView, label: t('nav.instances'), icon: Layers },
-    { id: 'messages' as ActiveView, label: t('nav.messages'), icon: MessageSquare },
+    // { id: 'messages' as ActiveView, label: t('nav.messages'), icon: MessageSquare },
     { id: 'tokens' as ActiveView, label: t('nav.apiDocs'), icon: Key },
     { id: 'webhooks' as ActiveView, label: t('nav.webhooks'), icon: Webhook },
     { id: 'logs' as ActiveView, label: t('nav.logs'), icon: FileText },
@@ -123,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }`}
         >
           <div className={`px-2 text-[11px] font-medium leading-relaxed ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            <div>© 2025 ChatAPI</div>
+            <div>© 2026 ChatAPI</div>
             <div className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
               {t('sidebar.allRightsReserved')}
             </div>
