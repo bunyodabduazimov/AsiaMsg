@@ -70,7 +70,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       });
 
     const toDayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const counts = new Map(days.map(date => [toDayKey(date), 0]));
+    const counts = new Map<string, number>(days.map(date => [toDayKey(date), 0]));
 
     if (statsActivity.length) {
       statsActivity.forEach((item, index) => {
