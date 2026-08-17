@@ -103,7 +103,7 @@ export class BaileysManager {
       keepAliveIntervalMs: 25000,
       qrTimeout: 60000,
       markOnlineOnConnect: false,
-      syncFullHistory: true,
+      syncFullHistory: false,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['ChatAPI', 'Ubuntu', '1.0.0']
@@ -600,7 +600,7 @@ export class BaileysManager {
     const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
     if (!messages.length) return;
 
-    if (upsert?.type && upsert.type !== 'notify') {
+    if (upsert?.type && !['notify', 'append'].includes(upsert.type)) {
       return;
     }
 
@@ -614,7 +614,15 @@ export class BaileysManager {
       }
 
       const remoteJid = String(rawMessage?.key?.remoteJid || '').trim();
+      if (!remoteJid) {
+        continue;
+      }
+
       const messageId = rawMessage?.key?.id ? String(rawMessage.key.id) : null;
+      if (!messageId) {
+        continue;
+      }
+
       const sentAt = this.normalizeTimestamp(rawMessage?.messageTimestamp);
       const payload = this.buildIncomingMessagePayload(rawMessage);
 
@@ -626,26 +634,24 @@ export class BaileysManager {
         }
       });
 
-      if (!existing) {
-        await prisma.message.create({
-          data: {
-            instanceId: instance.id,
-            direction: 'inbound',
-            remoteJid,
-            messageId,
-            payload,
-            status: 'received',
-            sentAt
-          }
-        });
-      }
+      const savedMessage = existing ?? await prisma.message.create({
+        data: {
+          instanceId: instance.id,
+          direction: 'inbound',
+          remoteJid,
+          messageId,
+          payload,
+          status: 'received',
+          sentAt
+        }
+      });
 
       await webhookDispatcher.dispatchMessageReceived({
         instanceId: instance.id,
         settings: instance.settings,
-        messageId,
+        messageId: savedMessage.messageId,
         remoteJid,
-        sentAt,
+        sentAt: savedMessage.sentAt,
         payload
       });
 
@@ -653,9 +659,9 @@ export class BaileysManager {
         await webhookDispatcher.dispatchMediaDownload({
           instanceId: instance.id,
           settings: instance.settings,
-          messageId,
+          messageId: savedMessage.messageId,
           remoteJid,
-          sentAt,
+          sentAt: savedMessage.sentAt,
           payload
         });
       }
