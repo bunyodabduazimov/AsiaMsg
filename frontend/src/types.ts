@@ -118,6 +118,14 @@ export interface AppState {
   tokens: ApiToken[];
   webhooks: Webhook[];
   logs: LogEntry[];
+  dashboardStats?: {
+    totalMessages: number;
+    queuedMessages: number;
+    deliveredMessages: number;
+    errorMessages: number;
+    sentToday: number;
+    messageActivity: { date: string; count: number }[];
+  };
   userProfile: {
     name: string;
     email: string;

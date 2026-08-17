@@ -133,8 +133,29 @@ export interface BackendDashboardData {
   stats: {
     instances: number;
     messages: number;
+    queuedMessages?: number;
+    deliveredMessages?: number;
+    errorMessages?: number;
+    sentToday?: number;
     tokens: number;
     webhookLogs: number;
+    logs: number;
+    messageActivity?: { date: string; count: number }[];
+  };
+}
+
+export interface BackendWebhooksData {
+  instances: BackendInstance[];
+  webhookLogs: BackendWebhookLog[];
+  stats: {
+    instances: number;
+    webhookLogs: number;
+  };
+}
+
+export interface BackendLogsData {
+  logs: BackendInstanceLog[];
+  stats: {
     logs: number;
   };
 }
@@ -354,6 +375,12 @@ export const fetchCurrentUser = (apiBaseUrl: string, accessToken: string) =>
 
 export const fetchDashboard = (apiBaseUrl: string, accessToken: string) =>
   fetchJson<BackendDashboardData>(apiBaseUrl, '/api/dashboard', {}, accessToken);
+
+export const fetchWebhooksData = (apiBaseUrl: string, accessToken: string) =>
+  fetchJson<BackendWebhooksData>(apiBaseUrl, '/api/webhooks', {}, accessToken);
+
+export const fetchLogsData = (apiBaseUrl: string, accessToken: string) =>
+  fetchJson<BackendLogsData>(apiBaseUrl, '/api/logs', {}, accessToken);
 
 export const fetchInstances = (apiBaseUrl: string, accessToken: string) =>
   fetchJson<BackendInstance[]>(apiBaseUrl, '/api/instances', {}, accessToken).then(items =>

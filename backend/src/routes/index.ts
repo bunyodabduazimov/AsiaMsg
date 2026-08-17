@@ -7,6 +7,8 @@ import { chatsRouter } from '../chats';
 import { contactsRouter } from '../contacts';
 import { groupsRouter } from '../groups';
 import { mediaRouter } from '../media';
+import { webhooksRouter } from '../webhooks';
+import { instanceLogsRouter } from '../instance-logs';
 import { healthRouter } from './health.routes';
 
 export const apiRouter = Router();
@@ -20,3 +22,5 @@ apiRouter.use('/chats', chatsRouter);
 apiRouter.use('/contacts', contactsRouter);
 apiRouter.use('/groups', groupsRouter);
 apiRouter.use('/media', mediaRouter);
+apiRouter.use('/webhooks', webhooksRouter);
+apiRouter.use('/logs', instanceLogsRouter);

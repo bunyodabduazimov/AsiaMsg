@@ -42,11 +42,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const disconnectedCount = state.instances.filter(i => i.status === 'Disconnected').length;
   const totalCount = state.instances.length;
   const visibleMessages = state.messages.filter(message => message.number.toLowerCase() !== 'status@broadcast');
-  const totalMessages = visibleMessages.length;
-  const sentTodayCount = state.instances.reduce((sum, instance) => sum + instance.messagesToday, 0);
-  const queuedCount = visibleMessages.filter(message => message.status === 'В очереди').length;
-  const deliveredCount = visibleMessages.filter(message => message.status === 'Доставлено').length;
-  const errorCount = visibleMessages.filter(message => message.status === 'Ошибка').length;
+  const totalMessages = state.dashboardStats?.totalMessages ?? visibleMessages.length;
+  const sentTodayCount = state.dashboardStats?.sentToday ?? state.instances.reduce((sum, instance) => sum + instance.messagesToday, 0);
+  const queuedCount = state.dashboardStats?.queuedMessages ?? visibleMessages.filter(message => message.status === 'В очереди').length;
+  const deliveredCount = state.dashboardStats?.deliveredMessages ?? visibleMessages.filter(message => message.status === 'Доставлено').length;
+  const errorCount = state.dashboardStats?.errorMessages ?? visibleMessages.filter(message => message.status === 'Ошибка').length;
   const formatCount = (value: number) => value.toLocaleString('ru-RU');
   const getPercent = (value: number) => (totalCount > 0 ? (value / totalCount) * 100 : 0);
 
@@ -56,25 +56,37 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   }).format(date);
 
   const messageActivity = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() - (6 - index));
-      return date;
-    });
+    const statsActivity = state.dashboardStats?.messageActivity ?? [];
+    const days = statsActivity.length
+      ? statsActivity.map(item => {
+        const date = new Date(`${item.date}T00:00:00`);
+        return Number.isNaN(date.getTime()) ? new Date() : date;
+      })
+      : Array.from({ length: 7 }, (_, index) => {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - (6 - index));
+        return date;
+      });
 
     const toDayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const counts = new Map(days.map(date => [toDayKey(date), 0]));
 
-    for (const message of visibleMessages) {
-      if (!message.dataDate) continue;
+    if (statsActivity.length) {
+      statsActivity.forEach((item, index) => {
+        counts.set(toDayKey(days[index]), item.count);
+      });
+    } else {
+      for (const message of visibleMessages) {
+        if (!message.dataDate) continue;
 
-      const parsedDate = new Date(`${message.dataDate}T00:00:00`);
-      if (Number.isNaN(parsedDate.getTime())) continue;
+        const parsedDate = new Date(`${message.dataDate}T00:00:00`);
+        if (Number.isNaN(parsedDate.getTime())) continue;
 
-      const key = toDayKey(parsedDate);
-      if (counts.has(key)) {
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+        const key = toDayKey(parsedDate);
+        if (counts.has(key)) {
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
       }
     }
 
@@ -101,7 +113,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       linePath,
       fillPath: linePath ? `${linePath} L 490,140 L 10,140 Z` : ''
     };
-  }, [visibleMessages, isRu]);
+  }, [state.dashboardStats?.messageActivity, visibleMessages, isRu]);
 
   return (
     <div className="space-y-6">

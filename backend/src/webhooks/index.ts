@@ -1,1 +1,1 @@
-export {};
+export { webhooksRouter } from './webhooks.routes';

@@ -30,8 +30,11 @@ import {
   fetchBackendInstance,
   fetchBackendInstanceQr,
   fetchAllMessages,
+  fetchCurrentUser,
   fetchInstances,
   fetchDashboard,
+  fetchWebhooksData,
+  fetchLogsData,
   getDefaultApiBaseUrl,
   changePasswordToBackend,
   loginToBackend,
@@ -210,6 +213,7 @@ const createEmptyAppState = (): AppState => ({
   tokens: [],
   webhooks: [],
   logs: [],
+  dashboardStats: undefined,
   selectedInstanceId: null,
   selectedMessageId: null,
   selectedTokenId: null,
@@ -322,6 +326,7 @@ export function App() {
         tokens: [],
         webhooks: [],
         logs: [],
+        dashboardStats: undefined,
         selectedInstanceId: null,
         selectedMessageId: null,
         selectedTokenId: null,
@@ -329,6 +334,7 @@ export function App() {
         selectedLogId: null
       }));
       setBackendStatus('idle');
+      replaceRoute('/login');
       return;
     }
 
@@ -364,12 +370,20 @@ export function App() {
         },
         instances: instances.map(instance => ({
           ...instance,
-          messagesToday: messagesByInstance.get(instance.id) || 0
+          messagesToday: instance.messagesToday || messagesByInstance.get(instance.id) || 0
         })),
         messages,
         tokens,
         webhooks,
         logs,
+        dashboardStats: {
+          totalMessages: dashboard.stats.messages,
+          queuedMessages: dashboard.stats.queuedMessages ?? messages.filter(message => message.status === 'В очереди').length,
+          deliveredMessages: dashboard.stats.deliveredMessages ?? messages.filter(message => message.status === 'Доставлено').length,
+          errorMessages: dashboard.stats.errorMessages ?? messages.filter(message => message.status === 'Ошибка').length,
+          sentToday: dashboard.stats.sentToday ?? instances.reduce((sum, instance) => sum + instance.messagesToday, 0),
+          messageActivity: dashboard.stats.messageActivity ?? []
+        },
         selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
           ? routeInstanceId
           : null,
@@ -383,26 +397,103 @@ export function App() {
     };
 
     const loadInstancesOnly = async () => {
-      const instances = await fetchInstances(apiBaseUrl, accessToken);
+      const [currentUser, instances] = await Promise.all([
+        fetchCurrentUser(apiBaseUrl, accessToken),
+        fetchInstances(apiBaseUrl, accessToken)
+      ]);
       if (!isMounted) return;
+      setBackendUser(currentUser);
+      setState(prev => ({
+        ...prev,
+        userProfile: {
+          name: currentUser.name,
+          email: currentUser.email
+        }
+      }));
       applyInstancesData(instances);
       setBackendStatus('connected');
     };
 
     const loadMessagesPage = async () => {
-      const [instances, messages] = await Promise.all([
+      const [currentUser, instances, messages] = await Promise.all([
+        fetchCurrentUser(apiBaseUrl, accessToken),
         fetchInstances(apiBaseUrl, accessToken),
         fetchAllMessages(apiBaseUrl, accessToken)
       ]);
       if (!isMounted) return;
+      setBackendUser(currentUser);
+      setState(prev => ({
+        ...prev,
+        userProfile: {
+          name: currentUser.name,
+          email: currentUser.email
+        }
+      }));
       applyMessagesData(instances, messages);
+      setBackendStatus('connected');
+    };
+
+    const loadWebhooksPage = async () => {
+      const [currentUser, webhooksData] = await Promise.all([
+        fetchCurrentUser(apiBaseUrl, accessToken),
+        fetchWebhooksData(apiBaseUrl, accessToken)
+      ]);
+      if (!isMounted) return;
+
+      const instances = webhooksData.instances.map(mapBackendInstanceToUi);
+      const webhooks = buildWebhookItems(webhooksData.instances, webhooksData.webhookLogs);
+
+      setBackendUser(currentUser);
+      setState(prev => ({
+        ...prev,
+        userProfile: {
+          name: currentUser.name,
+          email: currentUser.email
+        },
+        instances,
+        webhooks,
+        selectedWebhookId: webhooks[0]?.id ?? null
+      }));
+      setBackendStatus('connected');
+    };
+
+    const loadLogsPage = async () => {
+      const [currentUser, logsData] = await Promise.all([
+        fetchCurrentUser(apiBaseUrl, accessToken),
+        fetchLogsData(apiBaseUrl, accessToken)
+      ]);
+      if (!isMounted) return;
+
+      const logs = logsData.logs.map(mapBackendLogToUi);
+
+      setBackendUser(currentUser);
+      setState(prev => ({
+        ...prev,
+        userProfile: {
+          name: currentUser.name,
+          email: currentUser.email
+        },
+        logs,
+        selectedLogId: logs[0]?.id ?? null,
+        notificationCount: Math.min(3, logs.length)
+      }));
       setBackendStatus('connected');
     };
 
     const sync = async () => {
       try {
-        if (state.activeView === 'overview' || state.activeView === 'webhooks' || state.activeView === 'logs') {
+        if (state.activeView === 'overview') {
           await loadDashboard();
+          return;
+        }
+
+        if (state.activeView === 'webhooks') {
+          await loadWebhooksPage();
+          return;
+        }
+
+        if (state.activeView === 'logs') {
+          await loadLogsPage();
           return;
         }
 
@@ -619,12 +710,20 @@ export function App() {
       },
       instances: instances.map(instance => ({
         ...instance,
-        messagesToday: messagesByInstance.get(instance.id) || 0
+        messagesToday: instance.messagesToday || messagesByInstance.get(instance.id) || 0
       })),
       messages,
       tokens,
       webhooks,
       logs,
+      dashboardStats: {
+        totalMessages: dashboard.stats.messages,
+        queuedMessages: dashboard.stats.queuedMessages ?? messages.filter(message => message.status === 'В очереди').length,
+        deliveredMessages: dashboard.stats.deliveredMessages ?? messages.filter(message => message.status === 'Доставлено').length,
+        errorMessages: dashboard.stats.errorMessages ?? messages.filter(message => message.status === 'Ошибка').length,
+        sentToday: dashboard.stats.sentToday ?? instances.reduce((sum, instance) => sum + instance.messagesToday, 0),
+        messageActivity: dashboard.stats.messageActivity ?? []
+      },
       selectedInstanceId: routeInstanceId && instances.some(instance => instance.id === routeInstanceId)
         ? routeInstanceId
         : null,
@@ -1359,8 +1458,10 @@ export function App() {
     }
   };
 
-  // If not authenticated — render auth page immediately, no Layout flash
-  if (showAuthModal) {
+  const shouldShowAuthPage = showAuthModal || !accessToken || !backendUser;
+
+  // If not authenticated or not verified yet — render auth page immediately, no Layout flash
+  if (shouldShowAuthPage) {
     return (
       <AuthPage
         backendStatus={backendStatus}
