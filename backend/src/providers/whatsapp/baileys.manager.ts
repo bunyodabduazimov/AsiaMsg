@@ -626,32 +626,12 @@ export class BaileysManager {
       const sentAt = this.normalizeTimestamp(rawMessage?.messageTimestamp);
       const payload = this.buildIncomingMessagePayload(rawMessage);
 
-      const existing = await prisma.message.findFirst({
-        where: {
-          instanceId: instance.id,
-          messageId,
-          direction: 'inbound'
-        }
-      });
-
-      const savedMessage = existing ?? await prisma.message.create({
-        data: {
-          instanceId: instance.id,
-          direction: 'inbound',
-          remoteJid,
-          messageId,
-          payload,
-          status: 'received',
-          sentAt
-        }
-      });
-
       await webhookDispatcher.dispatchMessageReceived({
         instanceId: instance.id,
         settings: instance.settings,
-        messageId: savedMessage.messageId,
+        messageId,
         remoteJid,
-        sentAt: savedMessage.sentAt,
+        sentAt,
         payload
       });
 
@@ -659,9 +639,9 @@ export class BaileysManager {
         await webhookDispatcher.dispatchMediaDownload({
           instanceId: instance.id,
           settings: instance.settings,
-          messageId: savedMessage.messageId,
+          messageId,
           remoteJid,
-          sentAt: savedMessage.sentAt,
+          sentAt,
           payload
         });
       }
