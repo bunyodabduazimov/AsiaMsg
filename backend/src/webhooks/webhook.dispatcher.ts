@@ -119,7 +119,7 @@ class WebhookDispatcher {
     sentAt: Date | null;
     payload: Prisma.InputJsonValue;
   }) {
-    if (!input.settings?.webhookUrl || !input.settings.webhookOnReceived) {
+    if (!input.settings?.webhookUrl) {
       return;
     }
 

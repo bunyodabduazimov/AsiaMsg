@@ -95,6 +95,7 @@
     "activeInstances": "Активные инстансы",
     "sentToday": "Отправлено сегодня",
     "delivered": "Доставлено",
+    "queued": "В очереди",
     "errors": "Ошибки",
     "messageActivity": "Активность сообщений",
     "aggregatedTraffic": "Суммарный трафик по всем номерам",

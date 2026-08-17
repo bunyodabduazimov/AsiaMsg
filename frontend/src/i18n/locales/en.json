@@ -95,6 +95,7 @@
     "activeInstances": "Active Instances",
     "sentToday": "Sent Today",
     "delivered": "Delivered",
+    "queued": "Queued",
     "errors": "Errors",
     "messageActivity": "Message Activity",
     "aggregatedTraffic": "Aggregated traffic across all channels",

@@ -28,6 +28,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     if (bgClass.includes('bg-blue-50')) return bgClass + ' dark:bg-blue-950/40 dark:text-blue-400';
     if (bgClass.includes('bg-emerald-50')) return bgClass + ' dark:bg-emerald-950/40 dark:text-emerald-400';
     if (bgClass.includes('bg-purple-50')) return bgClass + ' dark:bg-purple-950/40 dark:text-purple-400';
+    if (bgClass.includes('bg-amber-50')) return bgClass + ' dark:bg-amber-950/40 dark:text-amber-400';
     if (bgClass.includes('bg-rose-50')) return bgClass + ' dark:bg-rose-950/40 dark:text-rose-400';
     return bgClass;
   };

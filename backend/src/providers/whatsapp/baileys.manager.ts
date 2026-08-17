@@ -600,8 +600,16 @@ export class BaileysManager {
     const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
     if (!messages.length) return;
 
+    if (upsert?.type && upsert.type !== 'notify') {
+      return;
+    }
+
     for (const rawMessage of messages) {
       if (rawMessage?.key?.fromMe) {
+        continue;
+      }
+
+      if (rawMessage?.key?.remoteJid === 'status@broadcast') {
         continue;
       }
 
@@ -610,28 +618,26 @@ export class BaileysManager {
       const sentAt = this.normalizeTimestamp(rawMessage?.messageTimestamp);
       const payload = this.buildIncomingMessagePayload(rawMessage);
 
-      if (instance.settings?.storeIncomingMessages) {
-        const existing = await prisma.message.findFirst({
-          where: {
+      const existing = await prisma.message.findFirst({
+        where: {
+          instanceId: instance.id,
+          messageId,
+          direction: 'inbound'
+        }
+      });
+
+      if (!existing) {
+        await prisma.message.create({
+          data: {
             instanceId: instance.id,
+            direction: 'inbound',
+            remoteJid,
             messageId,
-            direction: 'inbound'
+            payload,
+            status: 'received',
+            sentAt
           }
         });
-
-        if (!existing) {
-          await prisma.message.create({
-            data: {
-              instanceId: instance.id,
-              direction: 'inbound',
-              remoteJid,
-              messageId,
-              payload,
-              status: 'received',
-              sentAt
-            }
-          });
-        }
       }
 
       await webhookDispatcher.dispatchMessageReceived({
